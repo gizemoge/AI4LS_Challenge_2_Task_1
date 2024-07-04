@@ -1,1 +1,1 @@
-# AI4LS_Challenge-
+# AI4LS_Challenge
