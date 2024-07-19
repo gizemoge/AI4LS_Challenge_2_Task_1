@@ -1,13 +1,16 @@
 # imports
-import matplotlib.pyplot as plt
 import pandas as pd
+import folium
+from pyproj import Transformer
 import seaborn as sns
 import matplotlib.dates as mdates
-import geopandas as gpd
+import matplotlib.pyplot as plt
 from shapely.geometry import Point
-import math
-from pyproj import Transformer
+
 pd.set_option('display.max_columns', None)
+
+import warnings
+warnings.filterwarnings('ignore')
 
 ############################################################################################################
 # İstenen tüm lokasyonları haritada görelim:
@@ -17,76 +20,38 @@ filtered_messstellen_gw = pd.read_csv("datasets/filtered_messstellen_gw.csv", se
 
 # Koordinat sütunlarını doğru formata dönüştür
 coordinates_of_locations = filtered_messstellen_gw[['hzbnr01', 'xrkko09', 'yhkko10']]
+coordinates_of_locations['xrkko09'] = coordinates_of_locations['xrkko09'].astype(str)
+coordinates_of_locations['yhkko10'] = coordinates_of_locations['yhkko10'].astype(str)
 coordinates_of_locations['xrkko09'] = coordinates_of_locations['xrkko09'].str.replace(',', '.').astype(float)
 coordinates_of_locations['yhkko10'] = coordinates_of_locations['yhkko10'].str.replace(',', '.').astype(float)
 
-# Bessel 1841 ve WGS 84 (GPS) için dönüşüm tanımlayıcıları
-transformer = Transformer.from_crs('epsg:4312', 'epsg:4326')
-
-# Koordinatları dönüştür ve yeni sütunları oluştur
-def transform_coordinates(row):
-    lon, lat = transformer.transform(row['xrkko09'], row['yhkko10'])
-    return pd.Series({'longitude': lon, 'latitude': lat})
-
-coordinates_of_locations[['longitude', 'latitude']] = coordinates_of_locations.apply(transform_coordinates, axis=1)
-
-
-
-
 coordinates_of_locations.head()
 
+# Create a transformer object for coordinate conversion
+transformer = Transformer.from_crs("EPSG:31287", "EPSG:4326", always_xy=True)
 
+# Function to convert coordinates
+def convert_coords(row):
+    lon, lat = transformer.transform(row['xrkko09'], row['yhkko10'])
+    return pd.Series({'latitude': lat, 'longitude': lon})
 
+# Apply the conversion to each row
+coordinates_of_locations[['latitude', 'longitude']] = coordinates_of_locations.apply(convert_coords, axis=1)
 
+# Create a map centered on Austria
+m = folium.Map(location=[47.5162, 14.5501], zoom_start=7)
 
+# Add markers for each location
+for idx, row in coordinates_of_locations.iterrows():
+    folium.Marker(
+        location=[row['latitude'], row['longitude']],
+        popup=f"Basin Code: {row['hzbnr01']}",
+        tooltip=f"Basin Code: {row['hzbnr01']}").add_to(m)
 
+# Save the map
+m.save("austria_water_basins_map.html")
 
+print("Map has been saved as 'austria_water_basins_map.html'. Open this file in a web browser to view the map.")
 
+##################################################################################################################333
 
-# Koordinatları GeoDataFrame'e dönüştürme
-geometry = [Point(xy) for xy in zip(coordinates_of_locations['xrkko09_dms'], coordinates_of_locations['yhkko10_dms'])]
-gdf = gpd.GeoDataFrame(coordinates_of_locations, geometry=geometry)
-
-# Koordinat referans sistemi (CRS) ayarı (örneğin EPSG:31287 - Avusturya projeksiyon sistemi)
-gdf.crs = 'EPSG:31287'
-
-# GeoDataFrame'i gösterme
-print(gdf)
-
-# Haritayı oluştur
-fig, ax = plt.subplots(figsize=(10, 10))
-gdf.plot(ax=ax, color='red', markersize=50)  # Noktaları kırmızı renkte ve büyük boyutta göster
-
-# Haritayı göster
-plt.show()
-
-
-############################################################################################################
-# Örnek bir lokasyonun yer altı su seviyesi
-df = pd.read_csv("datasets/processed/300111.csv", sep=';', encoding='windows-1252')
-df.shape
-df.head()
-
-# Tarih sütununu datetime formatına çevirme
-df['Date'] = pd.to_datetime(df['Date'], format='%Y-%m-%d')
-
-# Seaborn ile grafik çizimi
-plt.figure(figsize=(18, 8))
-sns.lineplot(x='Date', y='Value', data=df, color='b')
-
-# x ekseninde her 5 yılda bir yıl gösterme
-plt.gca().xaxis.set_major_locator(mdates.YearLocator(5))
-plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
-
-plt.title('Zaman Serisi Grafiği')
-plt.xlabel('Tarih')
-plt.ylabel('Değer')
-plt.grid(True)
-
-# Tarih etiketlerinin daha iyi gözükmesi için otomatik düzenleme
-plt.gcf().autofmt_xdate()
-
-# Grafiği göster
-plt.show()
-
-#####################################################################################################################
