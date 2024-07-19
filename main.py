@@ -44,7 +44,7 @@ location = [324095, 323295, 323154, 304535, 326934, 307397, 319053, 303727, 3196
             345694, 345728, 345645, 345652, 345678, 345686]
 
 
-def process_datasets(root_directory, batch_size=3):
+def process_datasets(root_directory, type="stand", batch_size=3):
     """
     Her veri seti klasöründeki üçer üçer CSV dosyalarını işleyip ilgili işlenmiş dizinlere kaydeder.
 
@@ -54,9 +54,17 @@ def process_datasets(root_directory, batch_size=3):
     """
     print(f"{root_directory} dizinindeki veri setleri işleniyor...")
 
-    folder_names = sorted([folder_name for folder_name in os.listdir(root_directory) if
-                           os.path.isdir(os.path.join(root_directory, folder_name)) and folder_name.startswith(
-                               'Grundwasserstand-Monatsmittel-')])
+    if type == "stand":
+        folder_names = sorted([folder_name for folder_name in os.listdir(root_directory) if
+                               os.path.isdir(os.path.join(root_directory, folder_name)) and folder_name.startswith(
+                                   'Grundwasserstand-Monatsmittel-')])
+        save_folder = 'processed'
+
+    elif type == "temp":
+        folder_names = sorted([folder_name for folder_name in os.listdir(root_directory) if
+                               os.path.isdir(os.path.join(root_directory, folder_name)) and folder_name.startswith(
+                                   "Grundwassertemperatur-Monatsmittel-")])
+        save_folder = 'processed_temp'
 
     for i in range(0, len(folder_names), batch_size):
         batch_folders = folder_names[i:i + batch_size]
@@ -64,7 +72,7 @@ def process_datasets(root_directory, batch_size=3):
         for folder_name in batch_folders:
             folder_path = os.path.join(root_directory, folder_name)
             folder_number = folder_name.split('-')[-1]
-            processed_folder_path = os.path.join(root_directory, 'processed')
+            processed_folder_path = os.path.join(root_directory, save_folder)
 
             if not os.path.exists(processed_folder_path):
                 os.makedirs(processed_folder_path)
@@ -101,9 +109,10 @@ def process_datasets(root_directory, batch_size=3):
                         print(f"Hata: {file_name} dosyasında 'Werte:' bulunamadı. Bu dosya atlanacak.")
                 else:
                     print(f"{file_name} dosyası listedeki konum numaralarından birini içermiyor. Bu dosya atlanacak.")
+
 # Kullanım
 root_directory = "datasets"
-process_datasets(root_directory, batch_size=3)
+process_datasets(root_directory, "stand", batch_size=3)
 
 
 # processed in içindeki csvlerde gereksiz boşluklar kaldıralım ve data tipini düzenleyelim
@@ -155,8 +164,17 @@ root_directory = "datasets"
 clean_and_save_csv_files(root_directory)
 
 
+####################################################################
+# sıcaklıkları alalım:
+root_directory = "datasets"
+process_datasets(root_directory, "temp", batch_size=3)
 
-# messtellen_gw.csv yi ayıklıyoruz:
+
+
+
+
+
+# messstellen_gw.csv yi ayıklıyoruz:
 # CSV dosyasını okuyun
 messstellen_gw = pd.read_csv("datasets/messstellen_gw.csv", encoding='windows-1252', delimiter=";")
 
