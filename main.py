@@ -102,7 +102,7 @@ def process_datasets(root_directory, batch_size=3):
                 else:
                     print(f"{file_name} dosyası listedeki konum numaralarından birini içermiyor. Bu dosya atlanacak.")
 # Kullanım
-root_directory = "/datasets"
+root_directory = "datasets"
 process_datasets(root_directory, batch_size=3)
 
 
@@ -151,12 +151,12 @@ def clean_and_save_csv_files(root_directory):
 
 
 # Örnek kullanım:
-root_directory = "/datasets"
+root_directory = "datasets"
 clean_and_save_csv_files(root_directory)
 
 
 
-
+# messtellen_gw.csv yi ayıklıyoruz:
 # CSV dosyasını okuyun
 messstellen_gw = pd.read_csv("datasets/messstellen_gw.csv", encoding='windows-1252', delimiter=";")
 
