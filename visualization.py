@@ -85,4 +85,4 @@ m.save("austria_nvl.html")
 
 print("Map has been saved as 'austria_nvl.html'. Open this file in a web browser to view the map.")
 
-# bu bize şunu gösterdi ki neredeyse her noktaya ait yağış verileri var.
+# bu bize şunu gösterdi ki neredeyse her noktaya ait yağış verileri var.hjhgku

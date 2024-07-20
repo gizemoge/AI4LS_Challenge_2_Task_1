@@ -294,3 +294,4 @@ filtered_messstellen_gw.to_csv("datasets/filtered_messstellen_gw.csv", index=Fal
 print(f"Filtrelenen veriler {filtered_messstellen_gw} dosyasına kaydedildi.")
 filtered_messstellen_gw = filtered_messstellen_gw.reset_index(drop=True)
 
+#fuııl
