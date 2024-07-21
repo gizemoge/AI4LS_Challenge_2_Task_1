@@ -203,6 +203,12 @@ filtered_messstellen_gw["matched_hzbnr01"] = filtered_messstellen_gw["matched_hz
 # sözlük oluşturalım:
 hzbnr_dict = pd.Series(filtered_messstellen_gw.matched_hzbnr01.values, index=filtered_messstellen_gw.hzbnr01).to_dict()
 
+hzbnr_df = pd.DataFrame(list(hzbnr_dict.items()), columns=['hzbnr', 'nvl_hzbnr'])
+
+# daha sonra kullanmak gerekirse diye kaydedelim:
+hzbnr_df.to_csv('datasets/hzbnr.csv', sep=';', index=False)
+
+
 
 
 # şimdi yağmur ve kar verimizi alalım:
@@ -294,4 +300,13 @@ filtered_messstellen_gw.to_csv("datasets/filtered_messstellen_gw.csv", index=Fal
 print(f"Filtrelenen veriler {filtered_messstellen_gw} dosyasına kaydedildi.")
 filtered_messstellen_gw = filtered_messstellen_gw.reset_index(drop=True)
 
-#fuııl
+# bakıyım bi:
+
+messstellen_nlv = pd.read_csv("datasets/messstellen_nlv.csv", encoding='windows-1252', delimiter=';')
+
+messstellen_nlv.head()
+
+filtered_messstellen_nvl = messstellen_nlv[messstellen_nlv['hzbnr01'].isin(hzbnr_df['nvl_hzbnr'])]
+
+filtered_messstellen_nvl.head()
+filtered_messstellen_nvl.to_csv('datasets/filtered_messstellen_nvl.csv', sep=';', index=False)
