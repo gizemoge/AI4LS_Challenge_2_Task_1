@@ -55,3 +55,35 @@ print("Map has been saved as 'austria_water_basins_map.html'. Open this file in 
 
 ##################################################################################################################333
 
+messstellen_nvl = pd.read_csv("datasets/messstellen_nlv.csv", sep=';', encoding='windows-1252')
+
+# Koordinat sütunlarını doğru formata dönüştür
+coordinates_of_nvl = messstellen_nvl[['hzbnr01', 'xrkko08', 'yhkko09']]
+coordinates_of_nvl['xrkko08'] = coordinates_of_nvl['xrkko08'].astype(str)
+coordinates_of_nvl['yhkko09'] = coordinates_of_nvl['yhkko09'].astype(str)
+coordinates_of_nvl['xrkko08'] = coordinates_of_nvl['xrkko08'].str.replace(',', '.').astype(float)
+coordinates_of_nvl['yhkko09'] = coordinates_of_nvl['yhkko09'].str.replace(',', '.').astype(float)
+
+
+def convert_coords(row):
+    lon, lat = transformer.transform(row['xrkko08'], row['yhkko09'])
+    return pd.Series({'latitude': lat, 'longitude': lon})
+coordinates_of_nvl[['latitude', 'longitude']] = coordinates_of_nvl.apply(convert_coords, axis=1)
+
+# Create a map centered on Austria
+m = folium.Map(location=[47.5162, 14.5501], zoom_start=7)
+
+# Add markers for each location
+for idx, row in coordinates_of_nvl.iterrows():
+    folium.Marker(
+        location=[row['latitude'], row['longitude']],
+        popup=f"Basin Code: {row['hzbnr01']}",
+        tooltip=f"Basin Code: {row['hzbnr01']}").add_to(m)
+
+# Save the map
+m.save("austria_nvl.html")
+
+print("Map has been saved as 'austria_nvl.html'. Open this file in a web browser to view the map.")
+
+# bu bize şunu gösterdi ki neredeyse her noktaya ait yağış verileri var.hjhgku
+
