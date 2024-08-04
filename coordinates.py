@@ -44,7 +44,7 @@ def convert_coords(x, y):
 
 filtered_messstellen_nvl[['latitude', 'longitude']] = filtered_messstellen_nvl.apply(lambda row: convert_coords(row['xrkko08'], row['yhkko09']), axis=1)
 
-filtered_messstellen_nvl.to_csv('datasets/filtered_messstellen_nvl.csv', index=False, encoding='windows-1252')
+#filtered_messstellen_nvl.to_csv('datasets/filtered_messstellen_nvl.csv', index=False, encoding='windows-1252')
 filtered_messstellen_gw.to_csv('datasets/filtered_messstellen_gw.csv', index=False, encoding='windows-1252')
 
 
@@ -209,22 +209,24 @@ def transform_coordinates(df):
     return df
 
 # burada filtrelenmemei? hallerini de koordinatlar? ekleyece?im:
+filtered_messstellen_gw = pd.read_csv("datasets/filtered_messstellen_gw.csv", sep=';', encoding='windows-1252')
 messstellen_gw = pd.read_csv("datasets/messstellen_gw.csv", sep=';', encoding='windows-1252')
 messstellen_nlv = pd.read_csv("datasets/messstellen_nlv.csv", sep=';', encoding='windows-1252')
 messstellen_owf = pd.read_csv("datasets/messstellen_owf.csv", sep=';', encoding='windows-1252')
 messstellen_qu = pd.read_csv("datasets/messstellen_qu.csv", sep=';', encoding='windows-1252')
 
-
+transformed_filtered_messstellen_gw = transform_coordinates(filtered_messstellen_gw)
 transformed_messstellen_gw = transform_coordinates(messstellen_gw)
 transformed_messstellen_nlv = transform_coordinates(messstellen_nlv)
 transformed_messstellen_owf = transform_coordinates(messstellen_owf)
 transformed_messstellen_qu = transform_coordinates(messstellen_qu)
 
 # kay?tl? çok az csv varm?? gibi bi de bunu kaydettim:
-messstellen_gw.to_csv('datasets/transformed_messstellen_gw.csv', index=False)
-messstellen_nlv.to_csv('datasets/transformed_messstellen_nlv.csv', index=False)
-messstellen_owf.to_csv('datasets/transformed_messstellen_owf.csv', index=False)
-messstellen_qu.to_csv('datasets/transformed_messstellen_qu.csv', index=False)
+transformed_filtered_messstellen_gw.to_csv('datasets/transformed_filtered_messstellen_gw.csv', index=False)
+transformed_messstellen_gw.to_csv('datasets/transformed_messstellen_gw.csv', index=False)
+transformed_messstellen_nlv.to_csv('datasets/transformed_messstellen_nlv.csv', index=False)
+transformed_messstellen_owf.to_csv('datasets/transformed_messstellen_owf.csv', index=False)
+transformed_messstellen_qu.to_csv('datasets/transformed_messstellen_qu.csv', index=False)
 
 # en yak?n koordinatlar? bulmak için cKDTree diye bi?ey varm?? onu deniyorum:
 

@@ -9,7 +9,7 @@ gw_test_empty = pd.read_csv("datasets/gw_test_empty.csv")
 
 location = list(gw_test_empty.columns[-487:])
 
-def process_datasets(root_directory, type="stand", batch_size=3, hzbnr_dict=None):
+def process_datasets(root_directory, type="stand", batch_size=3):
     """
     Her veri seti klasöründeki üçer üçer CSV dosyalarını işleyip ilgili işlenmiş dizinlere kaydeder.
 
@@ -67,19 +67,19 @@ def process_datasets(root_directory, type="stand", batch_size=3, hzbnr_dict=None
                             print(f"{file_name} dosyası location listesi ile eşleşmiyor. Bu dosya atlanacak.")
                             continue
 
-                    elif type == "n" or type == "sh":
-                        # 'N-Tagessummen' ve 'SH-Tageswerte' türündeki dosyalar için hzbnr_dict kontrolü
-                        matched_key = None
-                        for key, value in hzbnr_dict.items():
-                            if str(value) in file_name:
-                                matched_key = key
-                                break
-
-                        if matched_key:
-                            output_file_name = f"{matched_key}.csv"
-                        else:
-                            print(f"{file_name} dosyası hzbnr_dict değerleri ile eşleşmiyor. Bu dosya atlanacak.")
-                            continue
+                    # elif type == "n" or type == "sh":
+                    #     # 'N-Tagessummen' ve 'SH-Tageswerte' türündeki dosyalar için hzbnr_dict kontrolü
+                    #     matched_key = None
+                    #     for key, value in hzbnr_dict.items():
+                    #         if str(value) in file_name:
+                    #             matched_key = key
+                    #             break
+                    #
+                    #     if matched_key:
+                    #         output_file_name = f"{matched_key}.csv"
+                    #     else:
+                    #         print(f"{file_name} dosyası hzbnr_dict değerleri ile eşleşmiyor. Bu dosya atlanacak.")
+                    #         continue
                     else:
                         # Diğer türler için standart işleme
                         output_file_name = f"{file_name.split('.')[0][-6:]}.csv"
@@ -100,13 +100,14 @@ def process_datasets(root_directory, type="stand", batch_size=3, hzbnr_dict=None
                             # Dosyayı tek seferde oku
                             df = pd.read_csv(file_path, sep=";", skiprows=start_index + 1, encoding='windows-1252')
 
-                            if type == "n" or type == "sh":
-                                # 'N-Tagessummen' ve 'SH-Tageswerte' türündeki dosyalar için son sütun silinmez
-                                df.iloc[:-1].to_csv(output_file_path, sep=";", index=False, encoding='windows-1252')
-                            else:
-                                # Diğer türlerde son sütun ve satırı atarak kaydet
+                            if type in ["stand", "temp"]:
+                                # son sütun ve satırı atarak kaydet (bu dosyalarda boş bir 3.sütun var
                                 df.drop(df.columns[-1], axis=1, inplace=True)
                                 df.iloc[:-1].to_csv(output_file_path, sep=";", index=False, encoding='windows-1252')
+                            else:
+                                # 'N-Tagessummen' ve 'SH-Tageswerte' türündeki dosyalar için son sütun silinmez
+                                df.iloc[:-1].to_csv(output_file_path, sep=";", index=False, encoding='windows-1252')
+
 
                             print(f"{file_name} dosyası {output_file_path} dizinine işlendi.")
                         except pd.errors.ParserError as e:
@@ -127,60 +128,9 @@ process_datasets(root_directory, "stand", batch_size=3)
 process_datasets(root_directory, "temp", batch_size=3)
 
 
-
-
-# yağmur verisi n-tagessummen(mm) ve kar verisi sh-tagessummen(cm) için bir fonk yazalım, bunlar günlük veriler
-# aylığa çevirerek ayıklayalım:
-
-# hzbn eşleşmedi en yakın kooedinatları eşleştirmeyi deneyelimn
-# filtered_messstellen_gw ile messstellen.nlv ile koordinatları karşılaştırıp en yakın koordinatları olanların
-# hzbnr01 kodlarını eşleştireceğim daha sonra N-Tagessummen ve SH-Tagessummen verilerini bu yeni kodlara göre kullanacağım
-
-filtered_messstellen_gw = pd.read_csv("datasets/filtered_messstellen_gw.csv", encoding='windows-1252')
-messstellen_nlv = pd.read_csv("datasets/messstellen_nlv.csv", encoding='windows-1252', delimiter=';')
-
-messstellen_nlv.head()
-
-# ',' yerine '.' ile değiştirme ve float'a çevirme
-filtered_messstellen_gw['yhkko10'] = filtered_messstellen_gw['yhkko10'].astype(str).str.replace(',', '.').astype(float)
-filtered_messstellen_gw['xrkko09'] = filtered_messstellen_gw['xrkko09'].astype(str).str.replace(',', '.').astype(float)
-messstellen_nlv['yhkko09'] = messstellen_nlv['yhkko09'].astype(str).str.replace(',', '.').astype(float)
-messstellen_nlv['xrkko08'] = messstellen_nlv['xrkko08'].astype(str).str.replace(',', '.').astype(float)
-
-
-# Euclidean mesafe hesaplama
-def calculate_distance(row, df):
-    distances = np.sqrt((df['yhkko09'] - row['yhkko10'])**2 + (df['xrkko08'] - row['xrkko09'])**2)
-    return distances
-def find_closest_match(row, df):
-    distances = calculate_distance(row, df)
-    closest_index = distances.idxmin()
-    closest = df.loc[closest_index]
-    return pd.Series([closest['hzbnr01'], distances.min()], index=['matched_hzbnr01', 'distance'])
-
-filtered_messstellen_gw[['matched_hzbnr01', 'distance']] = filtered_messstellen_gw.apply(lambda row: find_closest_match(row, messstellen_nlv), axis=1)
-
-filtered_messstellen_gw["matched_hzbnr01"] = filtered_messstellen_gw["matched_hzbnr01"].astype(int)
-
-
-
-# sözlük oluşturalım:
-hzbnr_dict = pd.Series(filtered_messstellen_gw.matched_hzbnr01.values, index=filtered_messstellen_gw.hzbnr01).to_dict()
-
-hzbnr_df = pd.DataFrame(list(hzbnr_dict.items()), columns=['hzbnr', 'nvl_hzbnr'])
-
-# daha sonra kullanmak gerekirse diye kaydedelim:
-hzbnr_df.to_csv('datasets/hzbnr.csv', sep=';', index=False)
-
-
-
-
 # şimdi yağmur ve kar verimizi alalım:
-process_datasets(root_directory, "n", batch_size=3, hzbnr_dict=hzbnr_dict)
-process_datasets(root_directory, "sh", batch_size=3, hzbnr_dict=hzbnr_dict)
-
-
-
+process_datasets(root_directory, "n", batch_size=3) #1041 location
+process_datasets(root_directory, "sh", batch_size=3) #753 location
 
 
 # processed lerin in içindeki csvlerde gereksiz boşluklar kaldıralım ve data tipini düzenleyelim
@@ -256,6 +206,8 @@ clean_and_save_csv_files(root_directory)
 messstellen_gw = pd.read_csv("datasets/messstellen_gw.csv", encoding='windows-1252', delimiter=";")
 
 # hzbnr01 sütunundaki değerlerin location listesindeki elemanlardan biri olup olmadığını kontrol edin
+messstellen_gw['hzbnr01'] = messstellen_gw['hzbnr01'].astype(str)
+location = [str(item) for item in location]
 filtered_messstellen_gw = messstellen_gw[messstellen_gw['hzbnr01'].isin(location)]
 
 # Filtrelenen verileri yeni bir CSV dosyasına kaydedin
@@ -263,14 +215,3 @@ filtered_messstellen_gw.to_csv("datasets/filtered_messstellen_gw.csv", index=Fal
 
 print(f"Filtrelenen veriler {filtered_messstellen_gw} dosyasına kaydedildi.")
 filtered_messstellen_gw = filtered_messstellen_gw.reset_index(drop=True)
-
-# bakıyım bi:
-
-messstellen_nlv = pd.read_csv("datasets/messstellen_nlv.csv", encoding='windows-1252', delimiter=';')
-
-messstellen_nlv.head()
-
-filtered_messstellen_nvl = messstellen_nlv[messstellen_nlv['hzbnr01'].isin(hzbnr_df['nvl_hzbnr'])]
-
-filtered_messstellen_nvl.head()
-filtered_messstellen_nvl.to_csv('datasets/filtered_messstellen_nvl.csv', sep=';', index=False)
