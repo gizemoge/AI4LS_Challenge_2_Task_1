@@ -228,43 +228,7 @@ transformed_messstellen_nlv.to_csv('datasets/transformed_messstellen_nlv.csv', i
 transformed_messstellen_owf.to_csv('datasets/transformed_messstellen_owf.csv', index=False)
 transformed_messstellen_qu.to_csv('datasets/transformed_messstellen_qu.csv', index=False)
 
-# en yak?n koordinatlar? bulmak için cKDTree diye bi?ey varm?? onu deniyorum:
+# bu dosyada koordinatlar? standartla?t?r?p veri setlerine eklemi? oldum
 
 
 
-
-# Groundwater ve rain veri setlerindeki koordinatlar? numpy array'e çevirme
-groundwater_coords = transformed_messstellen_gw[['longitude', 'latitude']].values
-nlv_coords = transformed_messstellen_nlv[['longitude', 'latitude']].values
-
-# KDTree yap?s?n? olu?turma
-tree = cKDTree(nlv_coords)
-
-# Her bir groundwater noktas? için en yak?n rain noktas?n? bulma
-distances, indices = tree.query(groundwater_coords, k=1)
-
-# En yak?n rain noktalar?n? groundwater veri setine ekleme
-transformed_messstellen_gw['nearest_rain_index'] = indices
-transformed_messstellen_gw['nearest_rain_distance'] = distances
-
-# En yak?n rain verilerini groundwater veri setine ekleme
-nearest_rain_data = transformed_messstellen_nlv.iloc[indices].reset_index()
-transformed_messstellen_gw = transformed_messstellen_gw.reset_index().join(nearest_rain_data, rsuffix='_rain')
-transformed_messstellen_gw.head()
-# Gereksiz sütunlar? kald?rma ve yeniden adland?rma
-
-# BURADA HANG? SÜTUNLARI KALDIRMALI HANG?S? KALMALI YOKSA SADECE E?LE?T?R?LEN HZBNR LER? M? ALMALI B?LEMED?M
-
-# transformed_messstellen_gw.drop(columns=['nearest_rain_index', 'nearest_rain_distance', 'Date_rain'], inplace=True)
-# transformed_messstellen_gw.rename(columns={'rain': 'nearest_rain'}, inplace=True)
-
-
-# bi?ey deniyorum bu benim daha önceki e?le?tirmeme benzedi mi?
-
-new_hzbnr = transformed_messstellen_gw[["hzbnr01", "hzbnr01_rain"]]
-
-hzbnr = pd.read_csv("datasets/hzbnr.csv", sep=';')
-
-hzbnr.equals(new_hzbnr)
-
-# tabi bu daha büyük oldu?u için ayn? ç?kmad? ama bunu dü?ünücem

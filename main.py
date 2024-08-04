@@ -59,7 +59,7 @@ def process_datasets(root_directory, type="stand", batch_size=3):
                 if file_name.endswith('.csv'):
                     file_path = os.path.join(folder_path, file_name)
 
-                    if type in ["stand", "temp"]:
+                    if type in ["stand"]:
                         # 'stand' ve 'temp' türündeki dosyalar için location listesindeki kodları kontrol et
                         if any(str(loc) in file_name for loc in location):
                             output_file_name = f"{file_name.split('.')[0][-6:]}.csv"
@@ -199,6 +199,79 @@ def clean_and_save_csv_files(root_directory):
 
 
 clean_and_save_csv_files(root_directory)
+
+# nanlar düzeldi mi kontrol edelim:
+
+def check_for_nans(directory):
+    files_with_nan = []
+
+    # Klasördeki tüm dosyaları işle
+    for filename in os.listdir(directory):
+        if filename.endswith(".csv"):
+            file_path = os.path.join(directory, filename)
+
+            try:
+                # CSV dosyasını oku
+                df = pd.read_csv(file_path, sep=";")
+
+                # NaN değerleri kontrol et
+                if df.isnull().values.any():
+                    files_with_nan.append(filename)
+            except Exception as e:
+                print(f"{filename} okunamadı. Hata: {e}")
+
+    # NaN değer içeren dosyaları yazdır
+    if files_with_nan:
+        print("\nNaN değer içeren dosyalar:")
+        for file in files_with_nan:
+            print(file)
+    else:
+        print("\nHiçbir dosyada NaN değer bulunamadı.")
+
+
+# 'processed_rain' ve 'processed_snow' klasörlerini işleyin
+check_for_nans('datasets/processed_rain')
+check_for_nans('datasets/processed_snow')
+
+
+# heeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeelp
+
+
+
+# bu aşağıdakileri yapamdım çünkü nan değerler geldi bir yerden onu düzeltemedim
+# yağmur ve kar verisi günlük onları aylığa çevirip üstüne kaydedelim:
+def process_and_resample_files(directory):
+    # Klasördeki tüm dosyaları işle
+    for filename in os.listdir(directory):
+        if filename.endswith(".csv"):
+            file_path = os.path.join(directory, filename)
+
+            try:
+                # CSV dosyasını oku
+                df = pd.read_csv(file_path, sep=";")
+
+                # 'date' sütununun datetime formatında olduğunu varsay
+                df['Date'] = pd.to_datetime(df['Date'])
+
+                # Veriyi aylık toplam olarak yeniden örnekle
+                monthly_df = df.resample('M', on='Date').sum()
+
+                # Aylık veriyi aynı dosyanın üzerine kaydet
+                monthly_df.to_csv(file_path, index=True)
+
+                print(f"{filename} başarıyla kaydedildi.")
+            except Exception as e:
+                print(f"{filename} kaydedilemedi. Hata: {e}")
+
+# 'processed_rain' ve 'processed_snow' klasörlerini işleyin
+process_and_resample_files('datasets/processed_rain')
+process_and_resample_files('datasets/processed_snow')
+
+
+
+
+
+
 
 
 # messstellen_gw.csv yi ayıklıyoruz:
