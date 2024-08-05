@@ -200,47 +200,17 @@ def clean_and_save_csv_files(root_directory):
 
 clean_and_save_csv_files(root_directory)
 
-# nanlar düzeldi mi kontrol edelim:
 
-def check_for_nans(directory):
+
+
+
+
+# yağmur ve kar verisi günlük onları aylığa çevirip üstüne kaydedelim:
+# bu verilerde nan değerler var ben şimdilik ihmal ettim yani onlar sıfırmış gibi davrandım daha sonra bunu değerlendirip doldurabiliriz
+
+def process_and_resample_files(directory):
     files_with_nan = []
 
-    # Klasördeki tüm dosyaları işle
-    for filename in os.listdir(directory):
-        if filename.endswith(".csv"):
-            file_path = os.path.join(directory, filename)
-
-            try:
-                # CSV dosyasını oku
-                df = pd.read_csv(file_path, sep=";")
-
-                # NaN değerleri kontrol et
-                if df.isnull().values.any():
-                    files_with_nan.append(filename)
-            except Exception as e:
-                print(f"{filename} okunamadı. Hata: {e}")
-
-    # NaN değer içeren dosyaları yazdır
-    if files_with_nan:
-        print("\nNaN değer içeren dosyalar:")
-        for file in files_with_nan:
-            print(file)
-    else:
-        print("\nHiçbir dosyada NaN değer bulunamadı.")
-
-
-# 'processed_rain' ve 'processed_snow' klasörlerini işleyin
-check_for_nans('datasets/processed_rain')
-check_for_nans('datasets/processed_snow')
-
-
-# heeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeelp
-
-
-
-# bu aşağıdakileri yapamdım çünkü nan değerler geldi bir yerden onu düzeltemedim
-# yağmur ve kar verisi günlük onları aylığa çevirip üstüne kaydedelim:
-def process_and_resample_files(directory):
     # Klasördeki tüm dosyaları işle
     for filename in os.listdir(directory):
         if filename.endswith(".csv"):
@@ -253,8 +223,8 @@ def process_and_resample_files(directory):
                 # 'date' sütununun datetime formatında olduğunu varsay
                 df['Date'] = pd.to_datetime(df['Date'])
 
-                # Veriyi aylık toplam olarak yeniden örnekle
-                monthly_df = df.resample('M', on='Date').sum()
+                # Veriyi aylık toplam olarak yeniden örnekle (NaN değerleri ihmal ederek)
+                monthly_df = df.resample('ME', on='Date').sum(min_count=1)  # NaN değerleri ihmal et
 
                 # Aylık veriyi aynı dosyanın üzerine kaydet
                 monthly_df.to_csv(file_path, index=True)
@@ -263,10 +233,10 @@ def process_and_resample_files(directory):
             except Exception as e:
                 print(f"{filename} kaydedilemedi. Hata: {e}")
 
+
 # 'processed_rain' ve 'processed_snow' klasörlerini işleyin
 process_and_resample_files('datasets/processed_rain')
 process_and_resample_files('datasets/processed_snow')
-
 
 
 
