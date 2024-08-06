@@ -227,7 +227,7 @@ def process_and_resample_files(directory):
                 monthly_df = df.resample('ME', on='Date').sum(min_count=1)  # NaN değerleri ihmal et
 
                 # Aylık veriyi aynı dosyanın üzerine kaydet
-                monthly_df.to_csv(file_path, index=True)
+                monthly_df.to_csv(file_path, sep=";", index=True)
 
                 print(f"{filename} başarıyla kaydedildi.")
             except Exception as e:

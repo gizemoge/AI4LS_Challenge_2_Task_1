@@ -209,7 +209,7 @@ def transform_coordinates(df):
     return df
 
 # burada filtrelenmemei? hallerini de koordinatlar? ekleyece?im:
-filtered_messstellen_gw = pd.read_csv("datasets/filtered_messstellen_gw.csv", sep=';', encoding='windows-1252')
+filtered_messstellen_gw = pd.read_csv("datasets/filtered_messstellen_gw.csv", sep=',', encoding='windows-1252')
 messstellen_gw = pd.read_csv("datasets/messstellen_gw.csv", sep=';', encoding='windows-1252')
 messstellen_nlv = pd.read_csv("datasets/messstellen_nlv.csv", sep=';', encoding='windows-1252')
 messstellen_owf = pd.read_csv("datasets/messstellen_owf.csv", sep=';', encoding='windows-1252')
