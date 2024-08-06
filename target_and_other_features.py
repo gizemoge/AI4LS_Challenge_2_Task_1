@@ -48,7 +48,7 @@ def process_target_csv(file_path, matches_df, rain_directory, snow_directory):
         neighbor_file = os.path.join(snow_directory, f"{int(neighbor)}.csv")
         if os.path.exists(neighbor_file):
             neighbor_df = pd.read_csv(neighbor_file, sep=";")
-            neighbor_df['Date'] = pd.to_datetime(neighbor_df['Date'], format='%Y-%m-%d')
+            neighbor_df['Date'] = pd.to_datetime(neighbor_df['Date'])
             for idx, row in target_df.iterrows():
                 matching_row = neighbor_df[(neighbor_df['Date'].dt.year == row['Date'].year) &
                                            (neighbor_df['Date'].dt.month == row['Date'].month)]
@@ -79,3 +79,4 @@ for filename in os.listdir(processed_directory):
     if filename.endswith(".csv"):
         file_path = os.path.join(processed_directory, filename)
         process_target_csv(file_path, matches_df, rain_directory, snow_directory)
+
