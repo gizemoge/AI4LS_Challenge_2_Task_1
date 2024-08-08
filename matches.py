@@ -17,13 +17,13 @@ gw_coordinates.head()
 gw_coordinates.shape # (487,3)
 
 #burada bunlar? kullanaca??m çünkü en yak?n tek bir nokta ile ili?kilendirmi?tim daha önceki denemelerimde ama o zaman e?le?tirme k?s?tl? olmu?tu.
-transformed_messstellen_nlv_rain = pd.read_csv("datasets/transformed_messstellen_nlv_rain.csv")
+transformed_messstellen_nlv_rain = pd.read_csv("datasets/transformed_nlv_rain.csv")
 transformed_messstellen_nlv_rain.head()
 nlv_rain_coordinates = transformed_messstellen_nlv_rain[["hzbnr01", "latitude", "longitude"]]
 nlv_rain_coordinates.head()
 nlv_rain_coordinates.shape # (863,3)
 
-transformed_messstellen_nlv_snow = pd.read_csv("datasets/transformed_messstellen_nlv_snow.csv")
+transformed_messstellen_nlv_snow = pd.read_csv("datasets/transformed_nlv_snow.csv")
 transformed_messstellen_nlv_snow.head()
 nlv_snow_coordinates = transformed_messstellen_nlv_snow[["hzbnr01", "latitude", "longitude"]]
 nlv_snow_coordinates.head()

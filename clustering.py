@@ -93,7 +93,7 @@ plt.show()
 
 
 # Rain
-rain = pd.read_csv("datasets/transformed_messstellen_nlv_rain.csv")
+rain = pd.read_csv("datasets/transformed_nlv_rain.csv")
 rain.head()
 
 # Tüm sütunlardaki benzersiz de?erleri bulma
@@ -118,7 +118,7 @@ plt.show()
 
 
 # Snow
-snow = pd.read_csv("datasets/transformed_messstellen_nlv_snow.csv")
+snow = pd.read_csv("datasets/transformed_nlv_snow.csv")
 snow.head()
 
 # Tüm sütunlardaki benzersiz de?erleri bulma
