@@ -244,6 +244,7 @@ def clean_and_save_csv_files(root_directory):
                         df['Date'] = df['Date'].str.strip()
 
                         df['Date'] = pd.to_datetime(df['Date'], format='%d.%m.%Y %H:%M:%S', errors='coerce')
+                        df['Date'] = pd.to_datetime(df['Date'], format='%d.%m.%Y %H:%M', errors='coerce')
                         df['Date'] = df['Date'].fillna(pd.to_datetime(df['Date'], format='%d.%m.%Y', errors='coerce'))
                         df['Date'] = df['Date'].dt.date
 
@@ -308,6 +309,16 @@ def process_and_resample_files(directory):
 process_and_resample_files('datasets/processed_rain')
 process_and_resample_files('datasets/processed_snow')
 
+######
+process_and_resample_files('datasets/processed_owf_flow_rate')
+process_and_resample_files('datasets/processed_owf_level')
+process_and_resample_files('datasets/processed_owf_sediment')
+
+process_and_resample_files('datasets/processed_qu_conductivity')
+process_and_resample_files('datasets/processed_qu_flow_rate')
+process_and_resample_files('datasets/processed_qu_temp')
+########
+
 
 
 
@@ -325,3 +336,6 @@ filtered_messstellen_gw.to_csv("datasets/filtered_messstellen_gw.csv", index=Fal
 
 print(f"Filtrelenen veriler {filtered_messstellen_gw} dosyasına kaydedildi.")
 filtered_messstellen_gw = filtered_messstellen_gw.reset_index(drop=True)
+
+# Querleitfähigkeit: malzemenin enine iletkenli?i, suyun içindeki çözünmü? iyonlar?n miktar?n? belirtir.
+# Yüksek de?erler, suyun mineral bak?m?ndan zengin oldu?unu veya kirlenmi? olabilece?ini gösterebilir.
