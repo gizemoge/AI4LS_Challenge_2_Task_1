@@ -33,40 +33,6 @@ def transform_coordinates(df):
 
     return df
 
-# Koordinat dönü?ümünü gerçekle?tirecek transformer objesini tan?mlay?n
-transformer = Transformer.from_crs("EPSG:31287", "EPSG:4326", always_xy=True)  # Burada 'xyz' ve 'abc' uygun EPSG kodlar? ile de?i?tirilmelidir
-
-def convert_coords(x, y):
-    """
-    x ve y koordinatlar?n? dönü?türerek enlem ve boylam de?erlerini döndürür.
-
-    Args:
-        x (float): X koordinat?.
-        y (float): Y koordinat?.
-
-    Returns:
-        pd.Series: Enlem ve boylam de?erlerini içeren bir Pandas Series nesnesi.
-    """
-    lon, lat = transformer.transform(x, y)
-    return pd.Series({'latitude': lat, 'longitude': lon})
-
-
-
-
-
-filtered_messstellen_nvl[['latitude', 'longitude']] = filtered_messstellen_nvl.apply(lambda row: convert_coords(row['xrkko08'], row['yhkko09']), axis=1)
-
-#filtered_messstellen_nvl.to_csv('datasets/filtered_messstellen_nvl.csv', index=False, encoding='windows-1252')
-filtered_messstellen_gw.to_csv('datasets/filtered_messstellen_gw.csv', index=False, encoding='windows-1252')
-
-
-
-
-
-
-
-
-
 
 # Visualization of the Groundwater data with the Agglomerative Clustering.
 X = filtered_messstellen_gw[['latitude', 'longitude']]
@@ -126,7 +92,7 @@ for _, row in locations.iterrows():
 m.save('austria_owf.html')
 
 
-# burada filtrelenmemei? hallerini de koordinatlar? ekleyece?im:
+# burada filtrelenmemi? hallerini de koordinatlar? ekleyece?im:
 filtered_messstellen_gw = pd.read_csv("datasets/filtered_messstellen_gw.csv", sep=',', encoding='windows-1252')
 messstellen_gw = pd.read_csv("datasets/messstellen_gw.csv", sep=';', encoding='windows-1252')
 messstellen_nlv = pd.read_csv("datasets/messstellen_nlv.csv", sep=';', encoding='windows-1252')
@@ -147,6 +113,3 @@ transformed_messstellen_owf.to_csv('datasets/transformed_messstellen_owf.csv', i
 transformed_messstellen_qu.to_csv('datasets/transformed_messstellen_qu.csv', index=False)
 
 # bu dosyada koordinatlar? standartla?t?r?p veri setlerine eklemi? oldum
-
-
-

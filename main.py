@@ -241,9 +241,6 @@ process_and_resample_files('datasets/processed_snow')
 
 
 
-
-
-
 # messstellen_gw.csv yi ayıklıyoruz:
 # CSV dosyasını okuyun
 messstellen_gw = pd.read_csv("datasets/messstellen_gw.csv", encoding='windows-1252', delimiter=";")
