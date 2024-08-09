@@ -9,7 +9,7 @@ gw_test_empty = pd.read_csv("datasets/gw_test_empty.csv")
 
 location = list(gw_test_empty.columns[-487:])
 
-def process_datasets(root_directory, type="stand", batch_size=3, hzbnr_dict=None):
+def process_datasets(root_directory, type="stand", batch_size=3):
     """
     Her veri seti klasöründeki üçer üçer CSV dosyalarını işleyip ilgili işlenmiş dizinlere kaydeder.
 
@@ -31,7 +31,7 @@ def process_datasets(root_directory, type="stand", batch_size=3, hzbnr_dict=None
         folder_names = sorted([folder_name for folder_name in os.listdir(root_directory) if
                                os.path.isdir(os.path.join(root_directory, folder_name)) and folder_name.startswith(
                                    "Grundwassertemperatur-Monatsmittel-")])
-        save_folder = 'processed_temp'
+        save_folder = 'processed_gw_temp'
 
     elif type == "n":
         folder_names = sorted([folder_name for folder_name in os.listdir(root_directory) if
@@ -45,6 +45,50 @@ def process_datasets(root_directory, type="stand", batch_size=3, hzbnr_dict=None
                                    "SH-Tageswerte")])
         save_folder = 'processed_snow'
 
+        ############################
+    elif type == "owf_q_flow_rate":
+        folder_names = sorted([folder_name for folder_name in os.listdir(root_directory) if
+                               os.path.isdir(os.path.join(root_directory, folder_name)) and folder_name.startswith(
+                                   "Q-Tagesmittel")])
+        save_folder = 'processed_owf_flow_rate'
+
+    elif type == "owf_sediment":
+        folder_names = sorted([folder_name for folder_name in os.listdir(root_directory) if
+                               os.path.isdir(os.path.join(root_directory, folder_name)) and folder_name.startswith(
+                                   "Schwebstoff-Tagesfracht")])
+        save_folder = 'processed_owf_sediment'
+
+    elif type == "owf_level":
+        folder_names = sorted([folder_name for folder_name in os.listdir(root_directory) if
+                               os.path.isdir(os.path.join(root_directory, folder_name)) and folder_name.startswith(
+                                   "W-Tagesmittel")])
+        save_folder = 'processed_owf_level'
+
+    elif type == "owf_temp":
+        folder_names = sorted([folder_name for folder_name in os.listdir(root_directory) if
+                               os.path.isdir(os.path.join(root_directory, folder_name)) and folder_name.startswith(
+                                   "WT-Monatsmittel")])
+        save_folder = 'processed_owf_temp'
+
+    elif type == "qu_flow_rate":
+        folder_names = sorted([folder_name for folder_name in os.listdir(root_directory) if
+                               os.path.isdir(os.path.join(root_directory, folder_name)) and folder_name.startswith(
+                                   "Quellschüttung-Tagesmittel")])
+        save_folder = 'processed_qu_flow_rate'
+
+    elif type == "qu_conductivity":
+        folder_names = sorted([folder_name for folder_name in os.listdir(root_directory) if
+                               os.path.isdir(os.path.join(root_directory, folder_name)) and folder_name.startswith(
+                                   "Quellleitfähigkeit-Tagesmittel")])
+        save_folder = 'processed_qu_conductivity'
+
+    elif type == "qu_temp":
+        folder_names = sorted([folder_name for folder_name in os.listdir(root_directory) if
+                               os.path.isdir(os.path.join(root_directory, folder_name)) and folder_name.startswith(
+                                   "Quellwassertemperatur-Tagesmittel")])
+        save_folder = 'processed_qu_temp'
+
+########################################
     for i in range(0, len(folder_names), batch_size):
         batch_folders = folder_names[i:i + batch_size]
 
@@ -59,7 +103,7 @@ def process_datasets(root_directory, type="stand", batch_size=3, hzbnr_dict=None
                 if file_name.endswith('.csv'):
                     file_path = os.path.join(folder_path, file_name)
 
-                    if type in ["stand", "temp"]:
+                    if type in ["stand"]:
                         # 'stand' ve 'temp' türündeki dosyalar için location listesindeki kodları kontrol et
                         if any(str(loc) in file_name for loc in location):
                             output_file_name = f"{file_name.split('.')[0][-6:]}.csv"
@@ -67,19 +111,6 @@ def process_datasets(root_directory, type="stand", batch_size=3, hzbnr_dict=None
                             print(f"{file_name} dosyası location listesi ile eşleşmiyor. Bu dosya atlanacak.")
                             continue
 
-                    elif type == "n" or type == "sh":
-                        # 'N-Tagessummen' ve 'SH-Tageswerte' türündeki dosyalar için hzbnr_dict kontrolü
-                        matched_key = None
-                        for key, value in hzbnr_dict.items():
-                            if str(value) in file_name:
-                                matched_key = key
-                                break
-
-                        if matched_key:
-                            output_file_name = f"{matched_key}.csv"
-                        else:
-                            print(f"{file_name} dosyası hzbnr_dict değerleri ile eşleşmiyor. Bu dosya atlanacak.")
-                            continue
                     else:
                         # Diğer türler için standart işleme
                         output_file_name = f"{file_name.split('.')[0][-6:]}.csv"
@@ -100,13 +131,14 @@ def process_datasets(root_directory, type="stand", batch_size=3, hzbnr_dict=None
                             # Dosyayı tek seferde oku
                             df = pd.read_csv(file_path, sep=";", skiprows=start_index + 1, encoding='windows-1252')
 
-                            if type == "n" or type == "sh":
-                                # 'N-Tagessummen' ve 'SH-Tageswerte' türündeki dosyalar için son sütun silinmez
-                                df.iloc[:-1].to_csv(output_file_path, sep=";", index=False, encoding='windows-1252')
-                            else:
-                                # Diğer türlerde son sütun ve satırı atarak kaydet
+                            if type in ["stand", "temp", "qu_flow_rate", "qu_conductivity", "qu_temp", "owf_sediment"]:
+                                # son sütun ve satırı atarak kaydet (bu dosyalarda boş bir 3.sütun var
                                 df.drop(df.columns[-1], axis=1, inplace=True)
                                 df.iloc[:-1].to_csv(output_file_path, sep=";", index=False, encoding='windows-1252')
+                            else:
+                                # 'N-Tagessummen' ve 'SH-Tageswerte' türündeki dosyalar için son sütun silinmez
+                                df.iloc[:-1].to_csv(output_file_path, sep=";", index=False, encoding='windows-1252')
+
 
                             print(f"{file_name} dosyası {output_file_path} dizinine işlendi.")
                         except pd.errors.ParserError as e:
@@ -122,64 +154,24 @@ root_directory = "datasets"
 process_datasets(root_directory, "stand", batch_size=3)
 
 
-####################################################################
+
 # sıcaklıkları alalım:
 process_datasets(root_directory, "temp", batch_size=3)
 
 
-
-
-# yağmur verisi n-tagessummen(mm) ve kar verisi sh-tagessummen(cm) için bir fonk yazalım, bunlar günlük veriler
-# aylığa çevirerek ayıklayalım:
-
-# hzbn eşleşmedi en yakın kooedinatları eşleştirmeyi deneyelimn
-# filtered_messstellen_gw ile messstellen.nlv ile koordinatları karşılaştırıp en yakın koordinatları olanların
-# hzbnr01 kodlarını eşleştireceğim daha sonra N-Tagessummen ve SH-Tagessummen verilerini bu yeni kodlara göre kullanacağım
-
-filtered_messstellen_gw = pd.read_csv("datasets/filtered_messstellen_gw.csv", encoding='windows-1252')
-messstellen_nlv = pd.read_csv("datasets/messstellen_nlv.csv", encoding='windows-1252', delimiter=';')
-
-messstellen_nlv.head()
-
-# ',' yerine '.' ile değiştirme ve float'a çevirme
-filtered_messstellen_gw['yhkko10'] = filtered_messstellen_gw['yhkko10'].astype(str).str.replace(',', '.').astype(float)
-filtered_messstellen_gw['xrkko09'] = filtered_messstellen_gw['xrkko09'].astype(str).str.replace(',', '.').astype(float)
-messstellen_nlv['yhkko09'] = messstellen_nlv['yhkko09'].astype(str).str.replace(',', '.').astype(float)
-messstellen_nlv['xrkko08'] = messstellen_nlv['xrkko08'].astype(str).str.replace(',', '.').astype(float)
-
-
-# Euclidean mesafe hesaplama
-def calculate_distance(row, df):
-    distances = np.sqrt((df['yhkko09'] - row['yhkko10'])**2 + (df['xrkko08'] - row['xrkko09'])**2)
-    return distances
-def find_closest_match(row, df):
-    distances = calculate_distance(row, df)
-    closest_index = distances.idxmin()
-    closest = df.loc[closest_index]
-    return pd.Series([closest['hzbnr01'], distances.min()], index=['matched_hzbnr01', 'distance'])
-
-filtered_messstellen_gw[['matched_hzbnr01', 'distance']] = filtered_messstellen_gw.apply(lambda row: find_closest_match(row, messstellen_nlv), axis=1)
-
-filtered_messstellen_gw["matched_hzbnr01"] = filtered_messstellen_gw["matched_hzbnr01"].astype(int)
-
-
-
-# sözlük oluşturalım:
-hzbnr_dict = pd.Series(filtered_messstellen_gw.matched_hzbnr01.values, index=filtered_messstellen_gw.hzbnr01).to_dict()
-
-hzbnr_df = pd.DataFrame(list(hzbnr_dict.items()), columns=['hzbnr', 'nvl_hzbnr'])
-
-# daha sonra kullanmak gerekirse diye kaydedelim:
-hzbnr_df.to_csv('datasets/hzbnr.csv', sep=';', index=False)
-
-
-
-
 # şimdi yağmur ve kar verimizi alalım:
-process_datasets(root_directory, "n", batch_size=3, hzbnr_dict=hzbnr_dict)
-process_datasets(root_directory, "sh", batch_size=3, hzbnr_dict=hzbnr_dict)
+process_datasets(root_directory, "n", batch_size=3) #1041 location
+process_datasets(root_directory, "sh", batch_size=3) #753 location
 
-
+####################
+process_datasets(root_directory, "owf_q_flow_rate", batch_size=3)
+process_datasets(root_directory, "owf_sediment", batch_size=3)
+process_datasets(root_directory, "owf_level", batch_size=3)
+process_datasets(root_directory, "owf_temp", batch_size=3)
+process_datasets(root_directory, "qu_flow_rate", batch_size=3)
+process_datasets(root_directory, "qu_conductivity", batch_size=3)
+process_datasets(root_directory, "qu_temp", batch_size=3)
+######################
 
 
 
@@ -217,15 +209,44 @@ def clean_and_save_csv_files(root_directory):
                         elif folder_name == 'processed_snow':
                             df = pd.read_csv(file_path, sep=';', header=None, names=["Date", "snow"],
                                              encoding='windows-1252')
-                        elif folder_name == 'processed_temp':
+                        elif folder_name == 'processed_gw_temp':
                             df = pd.read_csv(file_path, sep=';', header=None, names=["Date", "temp"],
                                              encoding='windows-1252')
+                        ##############
+                        elif folder_name == 'processed_owf_flow_rate':
+                            df = pd.read_csv(file_path, sep=';', header=None, names=["Date", "flow_rate"],
+                                             encoding='windows-1252')
+                        elif folder_name == 'processed_owf_sediment':
+                            df = pd.read_csv(file_path, sep=';', header=None, names=["Date", "sediment"],
+                                             encoding='windows-1252')
+                        elif folder_name == 'processed_owf_level':
+                            df = pd.read_csv(file_path, sep=';', header=None, names=["Date", "level"],
+                                             encoding='windows-1252')
+                        elif folder_name == 'processed_owf_temp':
+                            df = pd.read_csv(file_path, sep=';', header=None, names=["Date", "temp"],
+                                             encoding='windows-1252')
+                        elif folder_name == 'processed_qu_flow_rate':
+                            df = pd.read_csv(file_path, sep=';', header=None, names=["Date", "flow_rate"],
+                                             encoding='windows-1252')
+                        elif folder_name == 'processed_qu_conductivity':
+                            df = pd.read_csv(file_path, sep=';', header=None, names=["Date", "conductivity"],
+                                             encoding='windows-1252')
+                        elif folder_name == 'processed_qu_temp':
+                            df = pd.read_csv(file_path, sep=';', header=None, names=["Date", "temp"],
+                                             encoding='windows-1252')
+                        #############
+
+
                         else:
                             continue  # Diğer klasörler için işlem yapma
 
                         # Tarih sütununu datetime formatına çevirme
                         df['Date'] = df['Date'].str.strip()
+
                         df['Date'] = pd.to_datetime(df['Date'], format='%d.%m.%Y %H:%M:%S', errors='coerce')
+                        df['Date'] = pd.to_datetime(df['Date'], format='%d.%m.%Y %H:%M', errors='coerce')
+                        df['Date'] = df['Date'].fillna(pd.to_datetime(df['Date'], format='%d.%m.%Y', errors='coerce'))
+                        df['Date'] = df['Date'].dt.date
 
                         # Değer sütununun virgülle ayrılan ondalık kısmını nokta ile değiştirme ve float'a dönüştürme
                         value_col = df.columns[1]  # İkinci sütun
@@ -250,12 +271,64 @@ def clean_and_save_csv_files(root_directory):
 
 clean_and_save_csv_files(root_directory)
 
+# BURADAYIZ
+
+
+
+
+# yağmur ve kar verisi günlük onları aylığa çevirip üstüne kaydedelim:
+# bu verilerde nan değerler var ben şimdilik ihmal ettim yani onlar sıfırmış gibi davrandım daha sonra bunu değerlendirip doldurabiliriz
+
+def process_and_resample_files(directory):
+    files_with_nan = []
+
+    # Klasördeki tüm dosyaları işle
+    for filename in os.listdir(directory):
+        if filename.endswith(".csv"):
+            file_path = os.path.join(directory, filename)
+
+            try:
+                # CSV dosyasını oku
+                df = pd.read_csv(file_path, sep=";")
+
+                # 'date' sütununun datetime formatında olduğunu varsay
+                df['Date'] = pd.to_datetime(df['Date'])
+
+                # Veriyi aylık toplam olarak yeniden örnekle (NaN değerleri ihmal ederek)
+                monthly_df = df.resample('ME', on='Date').sum(min_count=1)  # NaN değerleri ihmal et
+
+                # Aylık veriyi aynı dosyanın üzerine kaydet
+                monthly_df.to_csv(file_path, sep=";", index=True)
+
+                print(f"{filename} başarıyla kaydedildi.")
+            except Exception as e:
+                print(f"{filename} kaydedilemedi. Hata: {e}")
+
+
+# 'processed_rain' ve 'processed_snow' klasörlerini işleyin
+process_and_resample_files('datasets/processed_rain')
+process_and_resample_files('datasets/processed_snow')
+
+######
+process_and_resample_files('datasets/processed_owf_flow_rate')
+process_and_resample_files('datasets/processed_owf_level')
+process_and_resample_files('datasets/processed_owf_sediment')
+
+process_and_resample_files('datasets/processed_qu_conductivity')
+process_and_resample_files('datasets/processed_qu_flow_rate')
+process_and_resample_files('datasets/processed_qu_temp')
+########
+
+
+
 
 # messstellen_gw.csv yi ayıklıyoruz:
 # CSV dosyasını okuyun
 messstellen_gw = pd.read_csv("datasets/messstellen_gw.csv", encoding='windows-1252', delimiter=";")
 
 # hzbnr01 sütunundaki değerlerin location listesindeki elemanlardan biri olup olmadığını kontrol edin
+messstellen_gw['hzbnr01'] = messstellen_gw['hzbnr01'].astype(str)
+location = [str(item) for item in location]
 filtered_messstellen_gw = messstellen_gw[messstellen_gw['hzbnr01'].isin(location)]
 
 # Filtrelenen verileri yeni bir CSV dosyasına kaydedin
@@ -264,13 +337,5 @@ filtered_messstellen_gw.to_csv("datasets/filtered_messstellen_gw.csv", index=Fal
 print(f"Filtrelenen veriler {filtered_messstellen_gw} dosyasına kaydedildi.")
 filtered_messstellen_gw = filtered_messstellen_gw.reset_index(drop=True)
 
-# bakıyım bi:
-
-messstellen_nlv = pd.read_csv("datasets/messstellen_nlv.csv", encoding='windows-1252', delimiter=';')
-
-messstellen_nlv.head()
-
-filtered_messstellen_nvl = messstellen_nlv[messstellen_nlv['hzbnr01'].isin(hzbnr_df['nvl_hzbnr'])]
-
-filtered_messstellen_nvl.head()
-filtered_messstellen_nvl.to_csv('datasets/filtered_messstellen_nvl.csv', sep=';', index=False)
+# Querleitfähigkeit: malzemenin enine iletkenli?i, suyun içindeki çözünmü? iyonlar?n miktar?n? belirtir.
+# Yüksek de?erler, suyun mineral bak?m?ndan zengin oldu?unu veya kirlenmi? olabilece?ini gösterebilir.
