@@ -7,11 +7,6 @@ import folium
 
 pd.set_option('display.max_columns', None)
 
-filtered_messstellen_nvl = pd.read_csv("datasets/filtered_messstellen_nvl.csv", sep=';', encoding='windows-1252')
-filtered_messstellen_gw = pd.read_csv("datasets/filtered_messstellen_gw.csv", sep=',', encoding='windows-1252')
-messstellen_qu = pd.read_csv("datasets/messstellen_qu.csv", sep=';', encoding='windows-1252')
-messstellen_owf = pd.read_csv("datasets/messstellen_owf.csv", sep=';', encoding='windows-1252')
-
 # Function to convert the coordinates to the desired format.
 def transform_coordinates(df):
     # Finding column names starting with x and y
@@ -33,7 +28,7 @@ def transform_coordinates(df):
 
     return df
 
-
+"""
 # Visualization of the Groundwater data with the Agglomerative Clustering.
 X = filtered_messstellen_gw[['latitude', 'longitude']]
 
@@ -90,14 +85,17 @@ for _, row in locations.iterrows():
     ).add_to(m)
 
 m.save('austria_owf.html')
+"""
 
 
 # burada filtrelenmemi? hallerini de koordinatlar? ekleyece?im:
-filtered_messstellen_gw = pd.read_csv("datasets/filtered_messstellen_gw.csv", sep=',', encoding='windows-1252')
-messstellen_gw = pd.read_csv("datasets/messstellen_gw.csv", sep=';', encoding='windows-1252')
-messstellen_nlv = pd.read_csv("datasets/messstellen_nlv.csv", sep=';', encoding='windows-1252')
-messstellen_owf = pd.read_csv("datasets/messstellen_owf.csv", sep=';', encoding='windows-1252')
-messstellen_qu = pd.read_csv("datasets/messstellen_qu.csv", sep=';', encoding='windows-1252')
+filtered_messstellen_gw = pd.read_csv("ehyd/datasets/filtered_messstellen_gw.csv", sep=',', encoding='windows-1252')
+filtered_messstellen_nvl = pd.read_csv("ehyd/datasets/filtered_messstellen_nvl.csv", sep=';', encoding='windows-1252')
+
+messstellen_gw = pd.read_csv("ehyd/datasets/messstellen_gw.csv", sep=';', encoding='windows-1252')
+messstellen_nlv = pd.read_csv("ehyd/datasets/messstellen_nlv.csv", sep=';', encoding='windows-1252')
+messstellen_owf = pd.read_csv("ehyd/datasets/messstellen_owf.csv", sep=';', encoding='windows-1252')
+messstellen_qu = pd.read_csv("ehyd/datasets/messstellen_qu.csv", sep=';', encoding='windows-1252')
 
 transformed_filtered_messstellen_gw = transform_coordinates(filtered_messstellen_gw)
 transformed_messstellen_gw = transform_coordinates(messstellen_gw)
@@ -106,10 +104,16 @@ transformed_messstellen_owf = transform_coordinates(messstellen_owf)
 transformed_messstellen_qu = transform_coordinates(messstellen_qu)
 
 # kay?tl? çok az csv varm?? gibi bi de bunu kaydettim:
-transformed_filtered_messstellen_gw.to_csv('datasets/transformed_filtered_messstellen_gw.csv', index=False)
-transformed_messstellen_gw.to_csv('datasets/transformed_messstellen_gw.csv', index=False)
-transformed_messstellen_nlv.to_csv('datasets/transformed_messstellen_nlv.csv', index=False)
-transformed_messstellen_owf.to_csv('datasets/transformed_messstellen_owf.csv', index=False)
-transformed_messstellen_qu.to_csv('datasets/transformed_messstellen_qu.csv', index=False)
+transformed_filtered_messstellen_gw.to_csv('ehyd/datasets/transformed_filtered_messstellen_gw.csv', index=False)
+transformed_messstellen_gw.to_csv('ehyd/datasets/transformed_messstellen_gw.csv', sep=';', index=False)
+transformed_messstellen_nlv.to_csv('ehyd/datasets/transformed_messstellen_nlv.csv', sep=';', index=False)
+transformed_messstellen_owf.to_csv('ehyd/datasets/transformed_messstellen_owf.csv', sep=';', index=False)
+transformed_messstellen_qu.to_csv('ehyd/datasets/transformed_messstellen_qu.csv', sep=';', index=False)
 
 # bu dosyada koordinatlar? standartla?t?r?p veri setlerine eklemi? oldum
+
+transformed_messstellen_nlv.head()
+transformed_messstellen_owf.head()
+transformed_messstellen_qu.head()
+transformed_messstellen_gw.head()
+transformed_filtered_messstellen_gw.head()
