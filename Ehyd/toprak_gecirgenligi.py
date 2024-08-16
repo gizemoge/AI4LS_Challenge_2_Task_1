@@ -66,3 +66,35 @@ df["inspireid_"].nunique() # fid ile ayn? asl?nda
 df["id"].nunique() # TODO bu da ayn? m? yukar?dakiler ile? AT.4d283c4d-ddfc-4d27-b679-7d5881e66f85.SO.SoilObject. ifadesinden sonraki rakamlar? tek b?rak?p bak.
 
 
+
+
+
+######## bir de ba?ka bir veriseti var, onu okutup bak?yorum:
+import json
+from shapely.geometry import shape
+
+geojson_path = 'Ehyd/ebod_map_export.geojson'
+
+# Load the GeoJSON file into a GeoDataFrame
+geojson = gpd.read_file(geojson_path)
+geojson.head()
+
+# Optionally, plot the data
+geojson.plot()
+
+# üstteki bo? döndü, bir de ?unu deneyeyim:
+with open(geojson_path) as f:
+    geojson_data = json.load(f)
+
+# Extract features (geometries and properties)
+features = geojson_data['features']
+
+# Example: Access the first feature's geometry and properties
+first_feature = features[0]
+geometry = shape(first_feature['geometry'])
+properties = first_feature['properties']
+
+print(f"Geometry: {geometry}")
+print(f"Properties: {properties}")
+
+
