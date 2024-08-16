@@ -95,6 +95,7 @@ geometry = shape(first_feature['geometry'])
 properties = first_feature['properties']
 
 print(f"Geometry: {geometry}")
+# bu alttaki çal??m?yor san?r?m
 print(f"Properties: {properties}")
 
 
