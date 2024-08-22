@@ -5,7 +5,7 @@ import numpy as np
 
 
 # The selected set of 487 locations in Austria
-gw_test_empty = pd.read_csv("datasets/gw_test_empty.csv")
+gw_test_empty = pd.read_csv("Ehyd/datasets/gw_test_empty.csv")
 
 location = list(gw_test_empty.columns[-487:])
 
@@ -150,7 +150,7 @@ def process_datasets(root_directory, type="stand", batch_size=3):
                     print(f"{file_name} dosyası listedeki konum numaralarından birini içermiyor. Bu dosya atlanacak.")
 
 # Targetımızı alalım:
-root_directory = "datasets"
+root_directory = "Ehyd/datasets"
 process_datasets(root_directory, "stand", batch_size=3)
 
 
@@ -306,17 +306,17 @@ def process_and_resample_files(directory):
 
 
 # 'processed_rain' ve 'processed_snow' klasörlerini işleyin
-process_and_resample_files('datasets/processed_rain')
-process_and_resample_files('datasets/processed_snow')
+process_and_resample_files('Ehyd/datasets/processed_rain')
+process_and_resample_files('Ehyd/datasets/processed_snow')
 
 ######
-process_and_resample_files('datasets/processed_owf_flow_rate')
-process_and_resample_files('datasets/processed_owf_level')
-process_and_resample_files('datasets/processed_owf_sediment')
+process_and_resample_files('Ehyd/datasets/processed_owf_flow_rate')
+process_and_resample_files('Ehyd/datasets/processed_owf_level')
+process_and_resample_files('Ehyd/datasets/processed_owf_sediment')
 
-process_and_resample_files('datasets/processed_qu_conductivity')
-process_and_resample_files('datasets/processed_qu_flow_rate')
-process_and_resample_files('datasets/processed_qu_temp')
+process_and_resample_files('Ehyd/datasets/processed_qu_conductivity')
+process_and_resample_files('Ehyd/datasets/processed_qu_flow_rate')
+process_and_resample_files('Ehyd/datasets/processed_qu_temp')
 ########
 
 
