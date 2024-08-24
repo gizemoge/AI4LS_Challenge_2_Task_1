@@ -1,0 +1,137 @@
+
+########################################################################################################################
+# Yer alt? su seviyesi – 3792
+# Yer alt? s?cakl?k – 1562
+# Messstellen – 3792
+#
+# Ya?mur – 863
+# Kar – 631
+# Messstellen – 907
+#
+# Fahig iletkenlik – 90
+# Schüt debi – 93
+# Temp – 93
+# messstellen – 93
+#
+# w-tages nehir seviyesi – 759 (iki csv'de data yok ama o yüzden 757 gelmeli)
+# wt-monat temp – 322
+# schweb sediment – 35
+# q tages debi - 625
+# messstellen - 792
+########################################################################################################################
+
+
+Sources:
+- Quellleitfahigkeit -  sularda ölçülen elektriksel iletkenlik (konduktans) bilgilerini içermektedir. µS/cm
+# Failed to create DataFrame: Quellleitfähigkeit-Tagesmittel-396796.csv, error: could not convert string to float: 'rekonstruiert aus Version 3->'
+
+- Quellshüttung - su debisi (ak?? h?z?) ölçümlerini içermektedir
+# Failed to create DataFrame: Quellschüttung-Tagesmittel-396093.csv, error: could not convert string to float: 'F'
+
+- Temperature
+# Failed to create DataFrame: Quellwassertemperatur-Tagesmittel-396010.csv, error: could not convert string to float: 'K'
+
+
+Surface Water:
+- W – nehir su seviyesi
+# Failed to create DataFrame: W-Tagesmittel-204388.csv, error: time data 'Invalid' does not match format '%d.%m.%Y %H:%M'
+# Failed to create DataFrame: W-Tagesmittel-211078.csv, error: time data 'Invalid' does not match format '%d.%m.%Y %H:%M'
+# data yok, k?zlardan biri de indirdikleri dosyalar? bir kontrol etsin
+
+- Wt – su s?cakl???
+
+
+- Schweb – sediment (Ask?da (çözünmü?) kat? madde miktar?, nehirdeki su ak???yla ta??nan küçük parçac?klar?n
+(kum, kil, organik maddeler vb.) miktar?n? gösterir. Bu ölçümler, nehrin ta??d??? sediment miktar?n? anlamak ve nehir ekosisteminin durumunu de?erlendirmek için önemlidir.)
+
+
+- Q – debi
+
+
+- Gesch (az olan) - Yatak yükü, ask?da kat? maddeden farkl? olarak daha büyük parçac?klar?n hareketini temsil eder. Nehirlerin dibinde ta??n?r, akarsu ittire ittire ta??n?r gibi.
+
+
+
+# in case
+def to_dataframe(folder_path, tip_coordinates):
+    """
+    Opens the CSV file of the measurement point, skips the header information,
+    and creates a DataFrame from the point where "Werte" (Values) is written.
+    Converts "Lücke" (Gap) values to NaN.
+
+    Then, it stores the measurement point ID and the newly created DataFrame
+    in a dictionary in the format {ID1: df1}.
+    After processing several measurement points, the output will be in the format {ID1: df1, ID2: df2, ID3: df3}.
+
+    Args:
+        folder_path: The directory where the CSV files are located.
+        tip_coordinates: A DataFrame containing tip coordinates to be matched with the IDs.
+
+    Returns:
+        dataframes_dict: A dictionary containing DataFrames.
+        coordinates: A DataFrame with matched coordinates.
+    """
+    dataframes_dict = {}
+    coordinates = pd.DataFrame()
+
+    for filename in os.listdir(folder_path):
+        try:
+            if filename.endswith(".csv"):
+                filepath = os.path.join(folder_path, filename)
+
+                with open(filepath, 'r', encoding='latin1') as file:
+                    lines = file.readlines()
+
+                    start_idx = next(i for i, line in enumerate(lines) if line.startswith("Werte:")) + 1
+                    header_line = lines[start_idx - 1].strip()
+
+                    # Check if the column after "Werte:" is "Invalid"
+                    if "Invalid" in header_line:
+                        print(f"Skipping file {filename} due to 'Invalid' column.")
+                        continue
+
+                    data_lines = lines[start_idx:]
+
+                    data = []
+                    for line in data_lines:
+                        if line.strip():  # Skip empty lines
+                            try:
+                                date_str, value_str = line.split(';')[:2]
+
+                                # Try multiple datetime formats
+                                try:
+                                    date = datetime.strptime(date_str.strip(), "%d.%m.%Y %H:%M:%S").date()
+                                except ValueError:
+                                    date = datetime.strptime(date_str.strip(), "%d.%m.%Y %H:%M").date()
+
+                                value_str = value_str.strip().replace('Lücke', 'NaN')  # Convert 'Lücke' to NaN
+
+                                # Skip rows containing "F", "K", or "rekonstruiert aus Version 3->"
+                                if any(keyword in value_str for keyword in ["F", "K", "rekonstruiert aus Version 3->"]):
+                                    continue
+
+                                # Convert value to float
+                                try:
+                                    value = float(value_str.replace(',', '.'))
+                                except ValueError:
+                                    continue
+
+                                data.append([date, value])
+                            except Exception as e:
+                                print(f"Failed to create DataFrame: {filename}, error: {e}")
+                                break
+
+                    if data:  # Only create DataFrame if there is data
+                        df = pd.DataFrame(data, columns=['Date', 'Values'])
+
+                        df_name = f"{filename[-10:-4]}"
+                        dataframes_dict[df_name] = df
+
+                        # Convert keys to integers
+                        int_keys = [int(key) for key in dataframes_dict.keys()]
+                        coordinates = tip_coordinates[tip_coordinates['hzbnr01'].isin(int_keys)]
+
+        except Exception as e:
+            print(f"Failed to create DataFrame: {filename}, error: {e}")
+
+    return dataframes_dict, coordinates
