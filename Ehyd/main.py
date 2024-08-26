@@ -1,341 +1,311 @@
-# imports
+# IMPORTS
 import os
 import pandas as pd
-import numpy as np
+from datetime import datetime
+from scipy.spatial import distance
+import seaborn as sns
+import matplotlib
+matplotlib.use('Qt5Agg')
+import matplotlib.pyplot as plt
+pd.set_option('display.max_columns', None)
+pd.set_option('display.max_rows', None)
+pd.set_option('display.float_format', lambda x: '%.3f' % x)
+pd.set_option('display.max_colwidth', None)
+pd.set_option('display.width', 500)
 
 
-# The selected set of 487 locations in Austria
-gw_test_empty = pd.read_csv("Ehyd/datasets/gw_test_empty.csv")
-
-location = list(gw_test_empty.columns[-487:])
-
-def process_datasets(root_directory, type="stand", batch_size=3):
+# FUNCTIONS
+def station_coordinates(input):
     """
-    Her veri seti klasöründeki üçer üçer CSV dosyalarını işleyip ilgili işlenmiş dizinlere kaydeder.
+    Creates a dataset consisting of measurement station IDs and their corresponding X and Y coordinates.
 
     Args:
-        root_directory (str): Veri seti klasörlerini içeren kök dizin.
-        type (str): İşlenecek veri seti türü ("stand", "temp", "n", "sh").
-        batch_size (int): Her seferinde işlenecek klasör sayısı.
-        hzbnr_dict (dict, optional): N-Tagessummen ve SH-Tageswerte dosyaları için kullanılacak eşleme sözlüğü.
+        input: Directory of the measurement station CSV file.
+
+    Returns:
+        df: A DataFrame containing columns "x", "y", and "hzbnr01".
     """
-    print(f"{root_directory} dizinindeki veri setleri işleniyor...")
+    df = pd.read_csv(f"Ehyd/datasets_ehyd/{input}/messstellen_alle.csv", sep=";")
+    output_df = df[["x", "y", "hzbnr01"]].copy()
+    output_df['x'] = output_df['x'].astype(str).str.replace(',', '.').astype(float)
+    output_df['y'] = output_df['y'].astype(str).str.replace(',', '.').astype(float)
+    return output_df
 
-    if type == "stand":
-        folder_names = sorted([folder_name for folder_name in os.listdir(root_directory) if
-                               os.path.isdir(os.path.join(root_directory, folder_name)) and folder_name.startswith(
-                                   'Grundwasserstand-Monatsmittel-')])
-        save_folder = 'processed'
-
-    elif type == "temp":
-        folder_names = sorted([folder_name for folder_name in os.listdir(root_directory) if
-                               os.path.isdir(os.path.join(root_directory, folder_name)) and folder_name.startswith(
-                                   "Grundwassertemperatur-Monatsmittel-")])
-        save_folder = 'processed_gw_temp'
-
-    elif type == "n":
-        folder_names = sorted([folder_name for folder_name in os.listdir(root_directory) if
-                               os.path.isdir(os.path.join(root_directory, folder_name)) and folder_name.startswith(
-                                   "N-Tagessummen")])
-        save_folder = 'processed_rain'
-
-    elif type == "sh":
-        folder_names = sorted([folder_name for folder_name in os.listdir(root_directory) if
-                               os.path.isdir(os.path.join(root_directory, folder_name)) and folder_name.startswith(
-                                   "SH-Tageswerte")])
-        save_folder = 'processed_snow'
-
-        ############################
-    elif type == "owf_q_flow_rate":
-        folder_names = sorted([folder_name for folder_name in os.listdir(root_directory) if
-                               os.path.isdir(os.path.join(root_directory, folder_name)) and folder_name.startswith(
-                                   "Q-Tagesmittel")])
-        save_folder = 'processed_owf_flow_rate'
-
-    elif type == "owf_sediment":
-        folder_names = sorted([folder_name for folder_name in os.listdir(root_directory) if
-                               os.path.isdir(os.path.join(root_directory, folder_name)) and folder_name.startswith(
-                                   "Schwebstoff-Tagesfracht")])
-        save_folder = 'processed_owf_sediment'
-
-    elif type == "owf_level":
-        folder_names = sorted([folder_name for folder_name in os.listdir(root_directory) if
-                               os.path.isdir(os.path.join(root_directory, folder_name)) and folder_name.startswith(
-                                   "W-Tagesmittel")])
-        save_folder = 'processed_owf_level'
-
-    elif type == "owf_temp":
-        folder_names = sorted([folder_name for folder_name in os.listdir(root_directory) if
-                               os.path.isdir(os.path.join(root_directory, folder_name)) and folder_name.startswith(
-                                   "WT-Monatsmittel")])
-        save_folder = 'processed_owf_temp'
-
-    elif type == "qu_flow_rate":
-        folder_names = sorted([folder_name for folder_name in os.listdir(root_directory) if
-                               os.path.isdir(os.path.join(root_directory, folder_name)) and folder_name.startswith(
-                                   "Quellschüttung-Tagesmittel")])
-        save_folder = 'processed_qu_flow_rate'
-
-    elif type == "qu_conductivity":
-        folder_names = sorted([folder_name for folder_name in os.listdir(root_directory) if
-                               os.path.isdir(os.path.join(root_directory, folder_name)) and folder_name.startswith(
-                                   "Quellleitfähigkeit-Tagesmittel")])
-        save_folder = 'processed_qu_conductivity'
-
-    elif type == "qu_temp":
-        folder_names = sorted([folder_name for folder_name in os.listdir(root_directory) if
-                               os.path.isdir(os.path.join(root_directory, folder_name)) and folder_name.startswith(
-                                   "Quellwassertemperatur-Tagesmittel")])
-        save_folder = 'processed_qu_temp'
-
-########################################
-    for i in range(0, len(folder_names), batch_size):
-        batch_folders = folder_names[i:i + batch_size]
-
-        for folder_name in batch_folders:
-            folder_path = os.path.join(root_directory, folder_name)
-            processed_folder_path = os.path.join(root_directory, save_folder)
-
-            if not os.path.exists(processed_folder_path):
-                os.makedirs(processed_folder_path)
-
-            for file_name in os.listdir(folder_path):
-                if file_name.endswith('.csv'):
-                    file_path = os.path.join(folder_path, file_name)
-
-                    if type in ["stand"]:
-                        # 'stand' ve 'temp' türündeki dosyalar için location listesindeki kodları kontrol et
-                        if any(str(loc) in file_name for loc in location):
-                            output_file_name = f"{file_name.split('.')[0][-6:]}.csv"
-                        else:
-                            print(f"{file_name} dosyası location listesi ile eşleşmiyor. Bu dosya atlanacak.")
-                            continue
-
-                    else:
-                        # Diğer türler için standart işleme
-                        output_file_name = f"{file_name.split('.')[0][-6:]}.csv"
-
-                    # 'Werte:' kelimesinden sonrasını bul
-                    start_index = None
-                    with open(file_path, 'r', encoding='windows-1252') as f:
-                        lines = f.readlines()
-                        for i, line in enumerate(lines):
-                            if 'Werte:' in line:
-                                start_index = i
-                                break
-
-                    if start_index is not None:
-                        output_file_path = os.path.join(processed_folder_path, output_file_name)
-
-                        try:
-                            # Dosyayı tek seferde oku
-                            df = pd.read_csv(file_path, sep=";", skiprows=start_index + 1, encoding='windows-1252')
-
-                            if type in ["stand", "temp", "qu_flow_rate", "qu_conductivity", "qu_temp", "owf_sediment"]:
-                                # son sütun ve satırı atarak kaydet (bu dosyalarda boş bir 3.sütun var
-                                df.drop(df.columns[-1], axis=1, inplace=True)
-                                df.iloc[:-1].to_csv(output_file_path, sep=";", index=False, encoding='windows-1252')
-                            else:
-                                # 'N-Tagessummen' ve 'SH-Tageswerte' türündeki dosyalar için son sütun silinmez
-                                df.iloc[:-1].to_csv(output_file_path, sep=";", index=False, encoding='windows-1252')
-
-
-                            print(f"{file_name} dosyası {output_file_path} dizinine işlendi.")
-                        except pd.errors.ParserError as e:
-                            print(f"Hata: {file_name} dosyası işlenirken bir hata oluştu. Bu dosya atlanacak.")
-                            continue
-                    else:
-                        print(f"Hata: {file_name} dosyasında 'Werte:' bulunamadı. Bu dosya atlanacak.")
-                else:
-                    print(f"{file_name} dosyası listedeki konum numaralarından birini içermiyor. Bu dosya atlanacak.")
-
-# Targetımızı alalım:
-root_directory = "Ehyd/datasets"
-process_datasets(root_directory, "stand", batch_size=3)
-
-
-
-# sıcaklıkları alalım:
-process_datasets(root_directory, "temp", batch_size=3)
-
-
-# şimdi yağmur ve kar verimizi alalım:
-process_datasets(root_directory, "n", batch_size=3) #1041 location
-process_datasets(root_directory, "sh", batch_size=3) #753 location
-
-####################
-process_datasets(root_directory, "owf_q_flow_rate", batch_size=3)
-process_datasets(root_directory, "owf_sediment", batch_size=3)
-process_datasets(root_directory, "owf_level", batch_size=3)
-process_datasets(root_directory, "owf_temp", batch_size=3)
-process_datasets(root_directory, "qu_flow_rate", batch_size=3)
-process_datasets(root_directory, "qu_conductivity", batch_size=3)
-process_datasets(root_directory, "qu_temp", batch_size=3)
-######################
-
-
-
-# processed lerin in içindeki csvlerde gereksiz boşluklar kaldıralım ve data tipini düzenleyelim
-# Lücke yi nan yapalım
-
-def clean_and_save_csv_files(root_directory):
+def to_dataframe(folder_path, tip_coordinates):
     """
-    Verilen kök dizindeki 'processed' ile başlayan her klasördeki CSV dosyalarını işleyip temizlenmiş hallerini üzerine kaydeder.
+    Processes CSV files in the specified folder, skipping header information and creating DataFrames
+    from the section marked by "Werte". Converts "L�cke" (Gap) values to NaN and skips rows with
+    invalid data or specific keywords.
+
+    For each CSV file, it extracts data starting after the "Werte:" line, processes date and value
+    columns, and stores each DataFrame in a dictionary where the key is derived from the filename.
+    Additionally, it matches IDs with tip coordinates and returns a DataFrame containing matched coordinates.
 
     Args:
-        root_directory (str): Veri seti klasörlerini içeren kök dizin.
+        folder_path (str): The directory path where the CSV files are located.
+        tip_coordinates (pd.DataFrame): A DataFrame containing coordinates to be matched with the IDs.
+
+    Returns:
+        dict: A dictionary where keys are IDs (extracted from filenames) and values are DataFrames.
+        pd.DataFrame: A DataFrame with matched coordinates based on IDs.
     """
-    print(f"{root_directory} dizinindeki veri setleri işleniyor...")
+    dataframes_dict = {}
+    coordinates = pd.DataFrame()
 
-    # Kök dizindeki tüm klasörleri al
-    for folder_name in os.listdir(root_directory):
-        folder_path = os.path.join(root_directory, folder_name)
+    for filename in os.listdir(folder_path):
+        try:
+            if filename.endswith(".csv"):
+                filepath = os.path.join(folder_path, filename)
 
-        # Eğer klasör ismi 'processed' ile başlıyorsa
-        if os.path.isdir(folder_path) and folder_name.startswith('processed'):
-            # Klasör içindeki tüm CSV dosyalarını işle
-            for file_name in os.listdir(folder_path):
-                if file_name.endswith('.csv'):
-                    file_path = os.path.join(folder_path, file_name)
+                with open(filepath, 'r', encoding='latin1') as file:
+                    lines = file.readlines()
 
-                    try:
-                        # CSV dosyasını oku
-                        if folder_name == 'processed':
-                            df = pd.read_csv(file_path, sep=';', header=None, names=["Date", "Target"],
-                                             encoding='windows-1252')
-                        elif folder_name == 'processed_rain':
-                            df = pd.read_csv(file_path, sep=';', header=None, names=["Date", "rain"],
-                                             encoding='windows-1252')
-                        elif folder_name == 'processed_snow':
-                            df = pd.read_csv(file_path, sep=';', header=None, names=["Date", "snow"],
-                                             encoding='windows-1252')
-                        elif folder_name == 'processed_gw_temp':
-                            df = pd.read_csv(file_path, sep=';', header=None, names=["Date", "temp"],
-                                             encoding='windows-1252')
-                        ##############
-                        elif folder_name == 'processed_owf_flow_rate':
-                            df = pd.read_csv(file_path, sep=';', header=None, names=["Date", "flow_rate"],
-                                             encoding='windows-1252')
-                        elif folder_name == 'processed_owf_sediment':
-                            df = pd.read_csv(file_path, sep=';', header=None, names=["Date", "sediment"],
-                                             encoding='windows-1252')
-                        elif folder_name == 'processed_owf_level':
-                            df = pd.read_csv(file_path, sep=';', header=None, names=["Date", "level"],
-                                             encoding='windows-1252')
-                        elif folder_name == 'processed_owf_temp':
-                            df = pd.read_csv(file_path, sep=';', header=None, names=["Date", "temp"],
-                                             encoding='windows-1252')
-                        elif folder_name == 'processed_qu_flow_rate':
-                            df = pd.read_csv(file_path, sep=';', header=None, names=["Date", "flow_rate"],
-                                             encoding='windows-1252')
-                        elif folder_name == 'processed_qu_conductivity':
-                            df = pd.read_csv(file_path, sep=';', header=None, names=["Date", "conductivity"],
-                                             encoding='windows-1252')
-                        elif folder_name == 'processed_qu_temp':
-                            df = pd.read_csv(file_path, sep=';', header=None, names=["Date", "temp"],
-                                             encoding='windows-1252')
-                        #############
+                    # Find the starting index of the data section
+                    start_idx = next((i for i, line in enumerate(lines) if line.startswith("Werte:")), None)
+                    if start_idx is None:
+                        continue  # Skip files that do not contain 'Werte:'
 
+                    start_idx += 1
+                    header_line = lines[start_idx - 1].strip()
 
-                        else:
-                            continue  # Diğer klasörler için işlem yapma
-
-                        # Tarih sütununu datetime formatına çevirme
-                        df['Date'] = df['Date'].str.strip()
-
-                        df['Date'] = pd.to_datetime(df['Date'], format='%d.%m.%Y %H:%M:%S', errors='coerce')
-                        df['Date'] = pd.to_datetime(df['Date'], format='%d.%m.%Y %H:%M', errors='coerce')
-                        df['Date'] = df['Date'].fillna(pd.to_datetime(df['Date'], format='%d.%m.%Y', errors='coerce'))
-                        df['Date'] = df['Date'].dt.date
-
-                        # Değer sütununun virgülle ayrılan ondalık kısmını nokta ile değiştirme ve float'a dönüştürme
-                        value_col = df.columns[1]  # İkinci sütun
-
-                        # Değer sütununun string olduğundan emin ol
-                        df[value_col] = df[value_col].astype(str).str.strip()
-                        df[value_col] = df[value_col].str.replace(',', '.')
-                        # 'Lücke' kelimesini NaN ile değiştirme
-                        df[value_col] = df[value_col].replace('Lücke', pd.NA)
-                        df[value_col] = pd.to_numeric(df[value_col], errors='coerce')
-
-                        # Temizlenmiş dosyayı orijinal dosyanın üzerine kaydet
-                        df.to_csv(file_path, sep=';', index=False, encoding='windows-1252')
-
-                        print(f"{file_name} dosyası üzerine kaydedildi.")
-                    except Exception as e:
-                        print(f"Hata: {file_name} dosyası işlenirken bir hata oluştu: {str(e)}")
+                    # Skip files with 'Invalid' in the header line
+                    if "Invalid" in header_line:
                         continue
 
-    print("İşlem tamamlandı.")
+                    data_lines = lines[start_idx:]
+
+                    data = []
+                    for line in data_lines:
+                        if line.strip():  # Skip empty lines
+                            try:
+                                date_str, value_str = line.split(';')[:2]
+
+                                # Try multiple date formats
+                                try:
+                                    date = datetime.strptime(date_str.strip(), "%d.%m.%Y %H:%M:%S").date()
+                                except ValueError:
+                                    try:
+                                        date = datetime.strptime(date_str.strip(), "%d.%m.%Y %H:%M").date()
+                                    except ValueError:
+                                        continue
+
+                                value_str = value_str.strip().replace('L�cke', 'NaN')  # Convert 'L�cke' to NaN
+
+                                # Skip rows with invalid data or specific keywords
+                                if any(keyword in value_str for keyword in ["F", "K", "rekonstruiert aus Version 3->"]):
+                                    continue
+
+                                # Convert value to float
+                                try:
+                                    value = float(value_str.replace(',', '.'))
+                                except ValueError:
+                                    continue
+
+                                data.append([date, value])
+                            except Exception:
+                                break
+
+                    if data:  # Create DataFrame only if data exists
+                        df = pd.DataFrame(data, columns=['Date', 'Values'])
+
+                        df_name = f"{filename[-10:-4]}"
+                        dataframes_dict[df_name] = df
+
+                        # Convert keys to integers
+                        int_keys = [int(key) for key in dataframes_dict.keys() if key.isdigit()]
+                        coordinates = tip_coordinates[tip_coordinates['hzbnr01'].isin(int_keys)]
+
+        except Exception:
+            continue
+
+    return dataframes_dict, coordinates
+
+def to_global(dataframes_dict, prefix=''):
+    """
+    Adds DataFrames from a dictionary to the global namespace with optional prefix.
+
+    Args:
+        dataframes_dict (dict): A dictionary where keys are names (str) and values are DataFrames.
+        prefix (str): An optional string to prefix to each DataFrame name in the global namespace.
+    """
+    for name, dataframe in dataframes_dict.items():
+        globals()[f"{prefix}{name}"] = dataframe
+
+def filter_dataframes_by_points(dataframes_dict, points_list):
+    """
+    Filters a dictionary of DataFrames to include only those whose names are specified in a given CSV file.
+
+    Args:
+        dataframes_dict (dict): A dictionary where keys are names (str) and values are DataFrames.
+        points_list (str): Path to a CSV file that contains the names (str) of the DataFrames to filter.
+
+    Returns:
+        dict: A filtered dictionary containing only the DataFrames whose names are listed in the CSV file.
+    """
+    filtered_dict = {name: df for name, df in dataframes_dict.items() if name in points_list}
+    return filtered_dict
+
+#####################################
+# Creating Dataframes from given CSVs
+#####################################
+
+##################################### Groundwater
+groundwater_all_coordinates = station_coordinates("Groundwater")
+
+# Groundwater Level
+groundwater_folder_path = "Ehyd/datasets_ehyd/Groundwater/Grundwasserstand-Monatsmittel"
+groundwater_dict, groundwater_coordinates = to_dataframe(groundwater_folder_path, groundwater_all_coordinates)
+
+to_global(groundwater_dict, prefix="gw_")
+
+# Groundwater Temperature
+groundwater_temperature_folder_path = "Ehyd\datasets_ehyd\Groundwater\Grundwassertemperatur-Monatsmittel"
+groundwater_temperature_dict, groundwater_temperature_coordinates = to_dataframe(groundwater_temperature_folder_path, groundwater_all_coordinates)
+
+to_global(groundwater_temperature_dict, prefix="gwt_")
+
+# Creating new dictionaries according to requested stations
+points = pd.read_csv("Ehyd/datasets_ehyd/gw_test_empty.csv")
+points_list = [col for col in points.columns[1:]]
+
+filtered_groundwater_dict = filter_dataframes_by_points(groundwater_dict, points_list)
+filtered_groundwater_temp_dict = filter_dataframes_by_points(groundwater_temperature_dict, points_list)
 
 
-clean_and_save_csv_files(root_directory)
+##################################### Precipitation
+precipitation_coordinates = station_coordinates("Precipitation")
 
-# BURADAYIZ
+# Rain
+rain_folder_path = "Ehyd/datasets_ehyd/Precipitation/N-Tagessummen"
+rain_dict, rain_coordinates = to_dataframe(rain_folder_path, precipitation_coordinates)
 
+to_global(rain_dict, prefix="rain_")
 
+# Snow
+snow_folder_path = "Ehyd/datasets_ehyd/Precipitation/NS-Tagessummen"
+snow_dict, snow_coordinates = to_dataframe(snow_folder_path, precipitation_coordinates)
 
-
-# yağmur ve kar verisi günlük onları aylığa çevirip üstüne kaydedelim:
-# bu verilerde nan değerler var ben şimdilik ihmal ettim yani onlar sıfırmış gibi davrandım daha sonra bunu değerlendirip doldurabiliriz
-
-def process_and_resample_files(directory):
-    files_with_nan = []
-
-    # Klasördeki tüm dosyaları işle
-    for filename in os.listdir(directory):
-        if filename.endswith(".csv"):
-            file_path = os.path.join(directory, filename)
-
-            try:
-                # CSV dosyasını oku
-                df = pd.read_csv(file_path, sep=";")
-
-                # 'date' sütununun datetime formatında olduğunu varsay
-                df['Date'] = pd.to_datetime(df['Date'])
-
-                # Veriyi aylık toplam olarak yeniden örnekle (NaN değerleri ihmal ederek)
-                monthly_df = df.resample('ME', on='Date').sum(min_count=1)  # NaN değerleri ihmal et
-
-                # Aylık veriyi aynı dosyanın üzerine kaydet
-                monthly_df.to_csv(file_path, sep=";", index=True)
-
-                print(f"{filename} başarıyla kaydedildi.")
-            except Exception as e:
-                print(f"{filename} kaydedilemedi. Hata: {e}")
+to_global(snow_dict, prefix="snow_")
 
 
-# 'processed_rain' ve 'processed_snow' klasörlerini işleyin
-process_and_resample_files('Ehyd/datasets/processed_rain')
-process_and_resample_files('Ehyd/datasets/processed_snow')
+##################################### Sources
+sources_coordinates = station_coordinates("Sources")
 
-######
-process_and_resample_files('Ehyd/datasets/processed_owf_flow_rate')
-process_and_resample_files('Ehyd/datasets/processed_owf_level')
-process_and_resample_files('Ehyd/datasets/processed_owf_sediment')
+# Flow Rate
+source_flow_rate_path = "Ehyd/datasets_ehyd/Sources/Quellsch�ttung-Tagesmittel"
+source_flow_rate_dict, source_flow_rate_coordinates = to_dataframe(source_flow_rate_path, sources_coordinates)
 
-process_and_resample_files('Ehyd/datasets/processed_qu_conductivity')
-process_and_resample_files('Ehyd/datasets/processed_qu_flow_rate')
-process_and_resample_files('Ehyd/datasets/processed_qu_temp')
-########
+to_global(source_flow_rate_dict, prefix="source_fr_")
+
+# Conductivity
+conductivity_folder_path = "Ehyd/datasets_ehyd/Sources/Quellleitf�higkeit-Tagesmittel"
+conductivity_dict, conductivity_coordinates = to_dataframe(conductivity_folder_path, sources_coordinates)
+
+to_global(conductivity_dict, prefix="conductivity_")
+
+# Source Temperature
+source_temp_folder_path = "Ehyd/datasets_ehyd/Sources/Quellwassertemperatur-Tagesmittel"
+source_temp_dict, source_temp_coordinates = to_dataframe(source_temp_folder_path, sources_coordinates)
+
+to_global(source_temp_dict, prefix="source_temp_")
 
 
+##################################### Surface Water
+
+surface_water_coordinates = station_coordinates("Surface_Water")
+
+# River Water Level
+surface_water_level_folder_path = "Ehyd/datasets_ehyd/Surface_Water/W-Tagesmittel"
+surface_water_level_dict, surface_water_level_coordinates = to_dataframe(surface_water_level_folder_path, surface_water_coordinates)
+
+to_global(surface_water_level_dict, prefix="surface_water_level")
+
+# Surface Water Temperature
+surface_water_temp_folder_path = "Ehyd/datasets_ehyd/Surface_Water/WT-Monatsmittel"
+river_temp_dict, river_temp_coordinates = to_dataframe(surface_water_temp_folder_path, surface_water_coordinates)
+
+to_global(river_temp_dict, prefix="surface_water_temp")
+
+# Sediment
+sediment_folder_path = "Ehyd/datasets_ehyd/Surface_Water/Schwebstoff-Tagesfracht"
+sediment_dict, sediment_coordinates = to_dataframe(sediment_folder_path, surface_water_coordinates)
+
+to_global(sediment_dict, prefix="sediment_")
+
+# Surface Water Flow Rate
+surface_water_flow_rate_folder_path = "Ehyd/datasets_ehyd/Surface_Water/Q-Tagesmittel"
+surface_water_flow_rate_dict, surface_water_flow_rate_coordinates = to_dataframe(surface_water_flow_rate_folder_path, surface_water_coordinates)
+
+to_global(surface_water_flow_rate_dict, prefix="surface_water_fr_")
+
+########################################################################################################################
+# Gathering associated features for 487 stations
+########################################################################################################################
+
+def calculate_distance(coord1, coord2):
+    return distance.euclidean(coord1, coord2)
+
+def find_nearest_coordinates(gw_row, df, k=20):
+    distances = df.apply(lambda row: calculate_distance(
+        (gw_row['x'], gw_row['y']),
+        (row['x'], row['y'])
+    ), axis=1)
+    nearest_indices = distances.nsmallest(k).index
+    return df.loc[nearest_indices]
+
+# Coordinate information for 487 stations into a DataFrame.
+filtered_gw_coordinates = groundwater_coordinates[groundwater_coordinates['hzbnr01'].isin([int(i) for i in points_list])]
+
+# Creating a dataframe that stores all the associated features of the 487 stations.
+data = pd.DataFrame()
+
+def add_nearest_coordinates_column(df_to_add, name, k, df_to_merge=None):
+    if df_to_merge is None:
+        df_to_merge = data  # Use the current value of 'data' as the default
+    results = []
+
+    # Find the nearest points according to the coordinates
+    for _, gw_row in filtered_gw_coordinates.iterrows():
+        nearest = find_nearest_coordinates(gw_row, df_to_add, k)
+        nearest_list = nearest['hzbnr01'].tolist()
+        results.append({
+            'hzbnr01': gw_row['hzbnr01'],
+            name: nearest_list
+        })
+
+    results_df = pd.DataFrame(results)
+
+    # Debug: Check if 'hzbnr01' exists in both dataframes
+    print("Columns in df_to_merge:", df_to_merge.columns)
+    print("Columns in results_df:", results_df.columns)
+
+    # Ensure that the column exists in both dataframes before merging
+    if 'hzbnr01' in df_to_merge.columns and 'hzbnr01' in results_df.columns:
+        # Merge operation
+        df = df_to_merge.merge(results_df, on='hzbnr01', how='inner')
+
+        # Debug: Birle?tirilmi? DataFrame'i yazd?rarak kontrol et
+        print("Merged DataFrame:")
+        print(df.head())
+    else:
+        raise KeyError("Column 'hzbnr01' does not exist in one of the dataframes.")
+
+    return df
 
 
-# messstellen_gw.csv yi ayıklıyoruz:
-# CSV dosyasını okuyun
-messstellen_gw = pd.read_csv("datasets/messstellen_gw.csv", encoding='windows-1252', delimiter=";")
+data = add_nearest_coordinates_column(groundwater_temperature_coordinates, 'nearest_gw_temp', 1, df_to_merge=filtered_gw_coordinates)
+data = add_nearest_coordinates_column(rain_coordinates, 'nearest_rain', 20, df_to_merge=data)
+data = add_nearest_coordinates_column(snow_coordinates, 'nearest_snow', 15, df_to_merge=data)
+data = add_nearest_coordinates_column(source_flow_rate_coordinates, 'nearest_source_fr', 5, df_to_merge=data)
+data = add_nearest_coordinates_column(conductivity_coordinates, 'nearest_conductivity', 5, df_to_merge=data)
+data = add_nearest_coordinates_column(source_temp_coordinates, 'nearest_source_temp', 5, df_to_merge=data)
+data = add_nearest_coordinates_column(surface_water_level_coordinates, 'nearest_owf_level', 20, df_to_merge=data)
+data = add_nearest_coordinates_column(river_temp_coordinates, 'nearest_owf_temp', 10, df_to_merge=data)
+data = add_nearest_coordinates_column(sediment_coordinates, 'nearest_sediment', 1, df_to_merge=data)
+data = add_nearest_coordinates_column(surface_water_flow_rate_coordinates, 'nearest_owf_fr', 20, df_to_merge=data)
 
-# hzbnr01 sütunundaki değerlerin location listesindeki elemanlardan biri olup olmadığını kontrol edin
-messstellen_gw['hzbnr01'] = messstellen_gw['hzbnr01'].astype(str)
-location = [str(item) for item in location]
-filtered_messstellen_gw = messstellen_gw[messstellen_gw['hzbnr01'].isin(location)]
+data.drop(["x", "y"], axis=1, inplace=True)
 
-# Filtrelenen verileri yeni bir CSV dosyasına kaydedin
-filtered_messstellen_gw.to_csv("datasets/filtered_messstellen_gw.csv", index=False)
+data.head()
 
-print(f"Filtrelenen veriler {filtered_messstellen_gw} dosyasına kaydedildi.")
-filtered_messstellen_gw = filtered_messstellen_gw.reset_index(drop=True)
 
-# Querleitfähigkeit: malzemenin enine iletkenli?i, suyun içindeki çözünmü? iyonlar?n miktar?n? belirtir.
-# Yüksek de?erler, suyun mineral bak?m?ndan zengin oldu?unu veya kirlenmi? olabilece?ini gösterebilir.

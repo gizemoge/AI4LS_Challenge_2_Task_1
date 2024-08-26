@@ -53,85 +53,122 @@ Surface Water:
 
 
 # in case
-def to_dataframe(folder_path, tip_coordinates):
-    """
-    Opens the CSV file of the measurement point, skips the header information,
-    and creates a DataFrame from the point where "Werte" (Values) is written.
-    Converts "Lücke" (Gap) values to NaN.
+#########################################################################################################################3
 
-    Then, it stores the measurement point ID and the newly created DataFrame
-    in a dictionary in the format {ID1: df1}.
-    After processing several measurement points, the output will be in the format {ID1: df1, ID2: df2, ID3: df3}.
+# Tarihler aras?nda filtreleme yap
+df_379313["Date"] = pd.to_datetime(df_379313["Date"])
+# df_379313 = df_379313[(df_379313["Date"] >= "1980-12-01") & (df_379313["Date"] <= "2021-12-01")]
 
-    Args:
-        folder_path: The directory where the CSV files are located.
-        tip_coordinates: A DataFrame containing tip coordinates to be matched with the IDs.
 
-    Returns:
-        dataframes_dict: A dictionary containing DataFrames.
-        coordinates: A DataFrame with matched coordinates.
-    """
-    dataframes_dict = {}
-    coordinates = pd.DataFrame()
 
-    for filename in os.listdir(folder_path):
-        try:
-            if filename.endswith(".csv"):
-                filepath = os.path.join(folder_path, filename)
+def set_day_to_first(df):
+    df['Date'] = df['Date'].apply(lambda x: x.replace(day=1))
+    return df
 
-                with open(filepath, 'r', encoding='latin1') as file:
-                    lines = file.readlines()
+for df_name in df_379313_rain_list:  # bu, a?a?daki fonksiyon ile birle?tirilebilir
+    df = globals().get(df_name)
+    df = set_day_to_first(df)
+    df = df[(df["Date"] >= "1980-12-01") & (df["Date"] <= "2021-12-01")]
+    print(df.head())
 
-                    start_idx = next(i for i, line in enumerate(lines) if line.startswith("Werte:")) + 1
-                    header_line = lines[start_idx - 1].strip()
 
-                    # Check if the column after "Werte:" is "Invalid"
-                    if "Invalid" in header_line:
-                        print(f"Skipping file {filename} due to 'Invalid' column.")
-                        continue
+def fill_missing_dates_nan(df, start_date="1980-12-01", end_date="2021-12-01"):
+    # T?m tarih aral???n? olu?tur
+    all_dates = pd.date_range(start=start_date, end=end_date, freq='MS')
 
-                    data_lines = lines[start_idx:]
+    # Veri ?er?evesini t?m tarihlerle yeniden indeksleyin ve eksik de?erleri NaN yap?n
+    df = df.set_index('Date').reindex(all_dates).reset_index()
+    df.columns = ['Date'] + list(df.columns[1:])  # 'Date' kolonunu tekrar adland?r?n
 
-                    data = []
-                    for line in data_lines:
-                        if line.strip():  # Skip empty lines
-                            try:
-                                date_str, value_str = line.split(';')[:2]
+    return df
 
-                                # Try multiple datetime formats
-                                try:
-                                    date = datetime.strptime(date_str.strip(), "%d.%m.%Y %H:%M:%S").date()
-                                except ValueError:
-                                    date = datetime.strptime(date_str.strip(), "%d.%m.%Y %H:%M").date()
 
-                                value_str = value_str.strip().replace('Lücke', 'NaN')  # Convert 'Lücke' to NaN
+for df_name in df_379313_rain_list:
+    df = globals().get(df_name)
+    if df is not None:
+        df = fill_missing_dates_nan(df)
+        globals()[df_name] = df
+        print(df.head())
 
-                                # Skip rows containing "F", "K", or "rekonstruiert aus Version 3->"
-                                if any(keyword in value_str for keyword in ["F", "K", "rekonstruiert aus Version 3->"]):
-                                    continue
 
-                                # Convert value to float
-                                try:
-                                    value = float(value_str.replace(',', '.'))
-                                except ValueError:
-                                    continue
 
-                                data.append([date, value])
-                            except Exception as e:
-                                print(f"Failed to create DataFrame: {filename}, error: {e}")
-                                break
 
-                    if data:  # Only create DataFrame if there is data
-                        df = pd.DataFrame(data, columns=['Date', 'Values'])
+merge_list = [df_379313]
+for df_name in df_379313_rain_list:
+    df = globals().get(df_name)
+    merge_list.append(df)
 
-                        df_name = f"{filename[-10:-4]}"
-                        dataframes_dict[df_name] = df
 
-                        # Convert keys to integers
-                        int_keys = [int(key) for key in dataframes_dict.keys()]
-                        coordinates = tip_coordinates[tip_coordinates['hzbnr01'].isin(int_keys)]
+# merge
+merged_df = merge_list[0]
 
-        except Exception as e:
-            print(f"Failed to create DataFrame: {filename}, error: {e}")
+# Listeyi gezerek t?m DataFrame'leri birle?tiriyoruz
+for i, df in enumerate(merge_list[1:], start=1):
+    # Her yeni DataFrame'den gelen kolonlara _i ekliyoruz
+    suffixes = (None, f'_df{i}')
+    merged_df = pd.merge(merged_df, df, on='Date', how='inner', suffixes=suffixes)
 
-    return dataframes_dict, coordinates
+
+
+merged_df.columns = ['Date', 'df_379313', 'df_100933', 'df_100925', 'df_100404', 'df_100941', 'df_100412', 'df_100503', 'df_100883', 'df_115352', 'df_100370', 'df_100529']
+merged_df.head()
+
+# Lagged merged df
+
+# Lag de?erini eklemek istedi?iniz kolonlar
+cols_to_lag = ['df_100933', 'df_100925', 'df_100404', 'df_100941', 'df_100412', 'df_100503', 'df_100883', 'df_115352', 'df_100370', 'df_100529']
+
+# Yeni bir veri ?er?evesi olu?tur
+lagged_merged_df = merged_df.copy()
+
+# Lag kolonlar?n? olu?tur
+for col in cols_to_lag:
+    lagged_merged_df[f'{col}_lag1'] = merged_df[col].shift(1)
+    lagged_merged_df[f'{col}_lag2'] = merged_df[col].shift(2)
+
+# Kolonlar? s?ralamak i?in ?nce lag1'ler ve sonra lag2'ler
+# ?nce t?m kolonlar? listeleyin
+lag1_cols = [f'{col}_lag1' for col in cols_to_lag]
+lag2_cols = [f'{col}_lag2' for col in cols_to_lag]
+merged_df_cols = merged_df.columns.to_list()
+
+# Kolon s?ralamas?
+new_order = merged_df_cols  + lag1_cols + lag2_cols
+
+# Veri ?er?evesini yeni kolon s?ralamas?na g?re d?zenle
+lagged_merged_df = lagged_merged_df[new_order]
+
+# Sonu?lar? g?r?nt?leme
+print(lagged_merged_df.head())
+
+len(lagged_merged_df.columns)
+
+# Heatmap
+data = lagged_merged_df.iloc[:, -31:]
+plt.figure(figsize=(20, 20))
+dataplot = sns.heatmap(data.corr(), cmap="YlGnBu", annot=True, annot_kws={'size': 8})
+
+# Grafi?i kaydetmek
+plt.savefig("Ehyd/datasets_ehyd/heatmap_80s_with_nan_n_lags.png", bbox_inches='tight')
+
+# Grafi?i g?stermek
+plt.show()
+
+
+merged_df.shape  # (493, 12)
+merged_df.isnull().sum()
+# merged_df.isnull().sum()
+# Out[85]:
+# Date           0
+# df_379313     53
+# df_100933    128
+# df_100925    109
+# df_100404      0
+# df_100941    127
+# df_100412      0
+# df_100503      0
+# df_100883    109
+# df_115352    361
+# df_100370      0
+# df_100529      0
+# dtype: int64
