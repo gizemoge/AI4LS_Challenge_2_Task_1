@@ -309,3 +309,63 @@ data.drop(["x", "y"], axis=1, inplace=True)
 data.head()
 
 
+data.head()
+data.shape
+
+
+# Tarihler s?ral? bir ?ekilde ilerliyor mu onun kontrolü
+def is_monoton(dict):
+    for df_name, value in dict.items():
+        if value['Date'].is_monotonic_increasing == False:
+            print(f"{df_name} monoton art?? göstermiyor. Bu konuda bir aksiyon al?nmal?")
+
+is_monoton(filtered_groundwater_dict)
+is_monoton(groundwater_temperature_dict)
+is_monoton(rain_dict)
+is_monoton(snow_dict)
+is_monoton(source_flow_rate_dict)
+is_monoton(conductivity_dict)
+is_monoton(source_temp_dict)
+is_monoton(surface_water_level_dict)
+is_monoton(river_temp_dict)
+is_monoton(sediment_dict)
+is_monoton(surface_water_flow_rate_dict)
+
+#jhuh
+def plot_row_count_distribution(df_dict):
+    """
+    Bu fonksiyon, verilen sözlükteki DataFrame'lerin sat?r say?lar?n?n da??l?m?n? histogram olarak çizer.
+
+    Parametre:
+    df_dict (dict): Anahtarlar?n string, de?erlerin ise pandas DataFrame oldu?u bir sözlük.
+    """
+    # DataFrame'lerin sat?r say?lar?n? hesaplay?n
+    row_counts = [df.shape[0] for df in df_dict.values()]
+
+    # Sat?r say?lar?n?n da??l?m?n? histogram olarak çizin
+    plt.hist(row_counts, bins=10, edgecolor='black')
+    plt.xlabel('Sat?r Say?s?')
+    plt.ylabel('Frekans')
+    plt.title('DataFrame Sat?r Say?lar?n?n Da??l?m?')
+    plt.show()
+
+plot_row_count_distribution(filtered_groundwater_dict)
+
+
+
+
+
+# print(f"{df_name} shape:\n{value.shape}\n")
+#             print(f"{df_name} missing values:\n{value.isnull().sum()}\n")
+
+# sat?r say?lar?na bakma
+shapes = []
+dates = []
+
+for df_name, value in filtered_groundwater_dict.items():
+    shapes.append(value.shape[0])
+    dates.append(value["Date"].min())
+
+print(f"min: {min(shapes)} ay say?s?")
+print(f"max: {max(shapes)} ay say?s?")
+max(dates)  # max, min y?l 2001
