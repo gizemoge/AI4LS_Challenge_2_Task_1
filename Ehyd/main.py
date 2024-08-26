@@ -5,6 +5,8 @@ from datetime import datetime
 from scipy.spatial import distance
 import seaborn as sns
 import matplotlib
+from xarray.util.generate_ops import inplace
+
 matplotlib.use('Qt5Agg')
 import matplotlib.pyplot as plt
 pd.set_option('display.max_columns', None)
@@ -107,7 +109,7 @@ def to_dataframe(folder_path, tip_coordinates):
 
                     if data:  # Create DataFrame only if data exists
                         df = pd.DataFrame(data, columns=['Date', 'Values'])
-
+                        df.drop(df.index[-1], inplace=True)  # Dropping the last row (2022-01-01)
                         df_name = f"{filename[-10:-4]}"
                         dataframes_dict[df_name] = df
 
@@ -303,14 +305,8 @@ data = add_nearest_coordinates_column(surface_water_level_coordinates, 'nearest_
 data = add_nearest_coordinates_column(river_temp_coordinates, 'nearest_owf_temp', 10, df_to_merge=data)
 data = add_nearest_coordinates_column(sediment_coordinates, 'nearest_sediment', 1, df_to_merge=data)
 data = add_nearest_coordinates_column(surface_water_flow_rate_coordinates, 'nearest_owf_fr', 20, df_to_merge=data)
-
 data.drop(["x", "y"], axis=1, inplace=True)
 
-data.head()
-
-
-data.head()
-data.shape
 
 
 # Tarihler s?ral? bir ?ekilde ilerliyor mu onun kontrolü
@@ -353,8 +349,6 @@ plot_row_count_distribution(filtered_groundwater_dict)
 
 
 
-
-
 # print(f"{df_name} shape:\n{value.shape}\n")
 #             print(f"{df_name} missing values:\n{value.isnull().sum()}\n")
 
@@ -369,3 +363,78 @@ for df_name, value in filtered_groundwater_dict.items():
 print(f"min: {min(shapes)} ay say?s?")
 print(f"max: {max(shapes)} ay say?s?")
 max(dates)  # max, min y?l 2001
+
+
+for df_name, df in filtered_groundwater_dict.items():
+    nan_rows = df[df.isnull().any(axis=1)]
+    print(f"DataFrame: {df_name}")
+    print(f"Toplam NaN say?s?: {df.isnull().sum()}")
+    print(nan_rows)
+
+
+# Missing Values
+# SARIMA son
+deneme = gw_377887.copy()
+######################################################################################################################3
+import itertools
+import pandas as pd
+import matplotlib.pyplot as plt
+from statsmodels.tsa.statespace.sarimax import SARIMAX
+
+# Parametre kombinasyonlar?n? olu?turma
+p = d = q = range(0, 2)
+pdq = list(itertools.product(p, d, q))
+seasonal_pdq = [(x[0], x[1], x[2], 12) for x in list(itertools.product(p, d, q))]
+
+best_aic = float("inf")
+best_param = None
+best_seasonal_param = None
+
+# En iyi SARIMA parametrelerini bulmak için Grid Search
+for param in pdq:
+    for seasonal_param in seasonal_pdq:
+        try:
+            model = SARIMAX(deneme['Values'],
+                            order=param,
+                            seasonal_order=seasonal_param,
+                            enforce_stationarity=False,
+                            enforce_invertibility=False)
+            results = model.fit(disp=False)
+            if results.aic < best_aic:
+                best_aic = results.aic
+                best_param = param
+                best_seasonal_param = seasonal_param
+        except:
+            continue
+
+print(f"En iyi parametreler: {best_param} ve {best_seasonal_param} ile AIC: {best_aic}")
+
+# SARIMA modelini olu?turma ve tahmin yapma
+sarima_model = SARIMAX(deneme['Values'],
+                       order=best_param,
+                       seasonal_order=best_seasonal_param)
+sarima_result = sarima_model.fit(disp=False)
+
+# Eksik de?erleri doldurma
+deneme['values_filled'] = sarima_result.predict(start=deneme.index[0], end=deneme.index[-1])
+
+deneme.drop(deneme.index[0:15], inplace=True)
+
+
+# Sonuçlar? görselle?tirme
+plt.figure(figsize=(12, 6))
+plt.plot(deneme.index, deneme['Values'], label='Original Values', linestyle='--', color='blue')
+plt.plot(deneme.index, deneme['values_filled'], label='Filled Values', linestyle='-', color='red')
+plt.title('Original and Filled Values')
+plt.xlabel('Date')
+plt.ylabel('Values')
+plt.legend()
+plt.xticks(rotation=45)
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+
+
+
+
+
