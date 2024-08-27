@@ -1,11 +1,16 @@
 # IMPORTS
 import os
+import warnings
+from statsmodels.tools.sm_exceptions import ConvergenceWarning
+warnings.simplefilter('ignore', category=ConvergenceWarning)
 import pandas as pd
 from datetime import datetime
 from scipy.spatial import distance
 import seaborn as sns
 import itertools
+import pickle
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 import matplotlib
@@ -31,8 +36,8 @@ def station_coordinates(input):
     """
     df = pd.read_csv(f"Ehyd/datasets_ehyd/{input}/messstellen_alle.csv", sep=";")
     output_df = df[["x", "y", "hzbnr01"]].copy()
-    output_df['x'] = output_df['x'].astype(str).str.replace(',', '.').astype(float)
-    output_df['y'] = output_df['y'].astype(str).str.replace(',', '.').astype(float)
+    output_df['x'] = output_df['x'].astype(str).str.replace(',', '.').astype("float32")
+    output_df['y'] = output_df['y'].astype(str).str.replace(',', '.').astype("float32")
     return output_df
 
 def to_dataframe(folder_path, tip_coordinates):
@@ -101,7 +106,7 @@ def to_dataframe(folder_path, tip_coordinates):
 
                                 # Convert value to float
                                 try:
-                                    value = float(value_str.replace(',', '.'))
+                                    value = np.float32(value_str.replace(',', '.'))
                                 except ValueError:
                                     continue
 
@@ -299,7 +304,7 @@ def add_nearest_coordinates_column(df_to_add, name, k, df_to_merge=None):
     return df
 
 data = add_nearest_coordinates_column(groundwater_temperature_coordinates, 'nearest_gw_temp', 1, df_to_merge=filtered_gw_coordinates)
-data = add_nearest_coordinates_column(rain_coordinates, 'nearest_rain', 20, df_to_merge=data)
+data = add_nearest_coordinates_column(rain_coordinates, 'nearest_rain', 20, df_to_merge=data) # TODO burada data arguman? default oldugu icin silebiliriz.
 data = add_nearest_coordinates_column(snow_coordinates, 'nearest_snow', 15, df_to_merge=data)
 data = add_nearest_coordinates_column(source_flow_rate_coordinates, 'nearest_source_fr', 5, df_to_merge=data)
 data = add_nearest_coordinates_column(conductivity_coordinates, 'nearest_conductivity', 5, df_to_merge=data)
@@ -317,7 +322,7 @@ data.drop(["x", "y"], axis=1, inplace=True)
 def is_monoton(dict):
     for df_name, value in dict.items():
         if value['Date'].is_monotonic_increasing == False:
-            print(f"{df_name} monoton art?? göstermiyor. Bu konuda bir aksiyon al?nmal?")
+            print(f"{df_name} monoton artis göstermiyor. Bu konuda bir aksiyon alinmali")
 
 is_monoton(filtered_groundwater_dict)
 is_monoton(groundwater_temperature_dict)
@@ -364,7 +369,7 @@ print(f"max: {max(shapes)} ay say?s?")
 max(dates)  # max, min y?l 2001
 
 
-for df_name, df in rain_dict.items():
+for df_name, df in sediment_dict.items():
     nan_rows = df[df.isnull().any(axis=1)]
     print(f"DataFrame: {df_name}")
     print(f"Toplam NaN say?s?: {df.isnull().sum()}")
@@ -382,7 +387,7 @@ p = d = q = range(0, 2)
 pdq = list(itertools.product(p, d, q))
 seasonal_pdq = [(x[0], x[1], x[2], 12) for x in list(itertools.product(p, d, q))]
 
-best_aic = float("inf")
+best_aic = np.float32("inf")
 best_param = None
 best_seasonal_param = None
 
@@ -417,11 +422,75 @@ deneme['values_filled'] = sarima_result.predict(start=deneme.index[0], end=denem
 deneme.drop(deneme.index[0:15], inplace=True)
 
 
+
+def fill_missing_values_with_sarima(df_dict):
+    """
+    Verilen DataFrame'lerdeki eksik de?erleri SARIMA modeli kullanarak doldurur.
+
+    Args:
+    df_dict (dict): Anahtarlar? DataFrame adlar?, de?erleri DataFrame'ler olan bir sözlük.
+
+    Returns:
+    dict: Eksik de?erleri doldurulmu? DataFrame'leri içeren bir sözlük.
+    """
+    filled_dfs = {}
+
+    for key, df in df_dict.items():
+        # SARIMA model parametrelerini belirleme
+        p = d = q = range(0, 2)
+        pdq = list(itertools.product(p, d, q))
+        seasonal_pdq = [(x[0], x[1], x[2], 12) for x in list(itertools.product(p, d, q))]
+
+        best_aic = np.float32("inf")
+        best_param = None
+        best_seasonal_param = None
+
+        # Grid Search ile en iyi SARIMA parametrelerini bulma
+        for param in pdq:
+            for seasonal_param in seasonal_pdq:
+                try:
+                    model = SARIMAX(df['Values'],
+                                    order=param,
+                                    seasonal_order=seasonal_param,
+                                    enforce_stationarity=False,
+                                    enforce_invertibility=False)
+                    results = model.fit(disp=False)
+                    if results.aic < best_aic:
+                        best_aic = results.aic
+                        best_param = param
+                        best_seasonal_param = seasonal_param
+                except:
+                    continue
+
+        # En iyi parametrelerle SARIMA modelini olu?turma
+        sarima_model = SARIMAX(df['Values'],
+                               order=best_param,
+                               seasonal_order=best_seasonal_param)
+        sarima_result = sarima_model.fit(disp=False)
+
+        # Eksik de?erleri doldurma
+        df['Values_Filled'] = sarima_result.predict(start=df.index[0], end=df.index[-1])
+        df['final_values'] = df['Values'].combine_first(df['Values_Filled'])
+        df = df["final_values"]
+        filled_dfs[key] = df
+
+    return filled_dfs
+
+
+# Fonksiyonun kullan?m?
+filled_sediment_dict = fill_missing_values_with_sarima(sediment_dict)
+
+filled_sediment_dict["201350"].head()
+
+
+
+
 # Sonuçlar? görselle?tirme
 plt.figure(figsize=(12, 6))
-plt.plot(deneme.index, deneme['Values'], label='Original Values', linestyle='--', color='blue')
-plt.plot(deneme.index, deneme['values_filled'], label='Filled Values', linestyle='-', color='red')
-plt.title('Original and Filled Values, lag=-1, SARIMA')
+plt.plot(filled_sediment_dict["201350"].index, filled_sediment_dict["201350"]['Values'], label='Original Values', marker="x",linestyle='--', color='blue')
+plt.plot(filled_sediment_dict["201350"].index, filled_sediment_dict["201350"]['Values_Filled'], label='Filled Values', linestyle='-', color='red')
+#plt.plot(filled_sediment_dict["201350"].index, filled_sediment_dict["201350"]['final_values'], label='Final Values', linestyle='-', color='green')
+plt.title('SARIMA')
 plt.xlabel('Date')
 plt.ylabel('Values')
 plt.legend()
@@ -431,3 +500,23 @@ plt.tight_layout()
 plt.show()
 
 
+dict_list = [filled_sediment_dict, ]
+for dict in dict_list:
+    with open(f'{dict}.pkl', 'wb') as f:
+        pickle.dump(dict, f)
+
+
+
+# write pickle
+with open('filled_sediment_dict.pkl', 'wb') as f:
+    pickle.dump(filled_sediment_dict, f)
+
+
+
+
+
+
+
+# read pickle
+#with open('my_dict.pkl', 'rb') as f:
+#    filled_sediment_dict = pickle.load(f)
