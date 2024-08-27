@@ -143,7 +143,6 @@ def to_monthly(df_dict):
         df_dict[df_name] = df_value.resample('M').mean()  # Do?rudan sözlü?ü güncelle
     return df_dict
 
-
 def filter_dataframes_by_points(dataframes_dict, points_list):
     """
     Filters a dictionary of DataFrames to include only those whose names are specified in a given CSV file.
@@ -365,7 +364,7 @@ print(f"max: {max(shapes)} ay say?s?")
 max(dates)  # max, min y?l 2001
 
 
-for df_name, df in filtered_groundwater_dict.items():
+for df_name, df in rain_dict.items():
     nan_rows = df[df.isnull().any(axis=1)]
     print(f"DataFrame: {df_name}")
     print(f"Toplam NaN say?s?: {df.isnull().sum()}")
@@ -375,7 +374,7 @@ for df_name, df in filtered_groundwater_dict.items():
 ########################################################################################################################
 # Imputing Missing Values with SARIMA()
 ########################################################################################################################
-deneme = gw_377887.copy()
+deneme = rain_126011.copy()
 
 # SARIMA
 # Parametre kombinasyonlar?n? olu?turma
@@ -417,12 +416,11 @@ deneme['values_filled'] = sarima_result.predict(start=deneme.index[0], end=denem
 
 deneme.drop(deneme.index[0:15], inplace=True)
 
-deneme['Predictions_lag1'] = deneme['values_filled'].shift(-1)
 
 # Sonuçlar? görselle?tirme
 plt.figure(figsize=(12, 6))
 plt.plot(deneme.index, deneme['Values'], label='Original Values', linestyle='--', color='blue')
-plt.plot(deneme.index, deneme['Predictions_lag1'], label='Filled Values', linestyle='-', color='red')
+plt.plot(deneme.index, deneme['values_filled'], label='Filled Values', linestyle='-', color='red')
 plt.title('Original and Filled Values, lag=-1, SARIMA')
 plt.xlabel('Date')
 plt.ylabel('Values')
