@@ -4,9 +4,11 @@ import pandas as pd
 from datetime import datetime
 from scipy.spatial import distance
 import seaborn as sns
+import itertools
+import pandas as pd
+import matplotlib.pyplot as plt
+from statsmodels.tsa.statespace.sarimax import SARIMAX
 import matplotlib
-from xarray.util.generate_ops import inplace
-
 matplotlib.use('Qt5Agg')
 import matplotlib.pyplot as plt
 pd.set_option('display.max_columns', None)
@@ -171,8 +173,7 @@ points = pd.read_csv("Ehyd/datasets_ehyd/gw_test_empty.csv")
 points_list = [col for col in points.columns[1:]]
 
 filtered_groundwater_dict = filter_dataframes_by_points(groundwater_dict, points_list)
-filtered_groundwater_temp_dict = filter_dataframes_by_points(groundwater_temperature_dict, points_list)
-
+filtered_gw_coordinates = groundwater_coordinates[groundwater_coordinates['hzbnr01'].isin([int(i) for i in points_list])]
 
 ##################################### Precipitation
 precipitation_coordinates = station_coordinates("Precipitation")
@@ -255,9 +256,6 @@ def find_nearest_coordinates(gw_row, df, k=20):
     nearest_indices = distances.nsmallest(k).index
     return df.loc[nearest_indices]
 
-# Coordinate information for 487 stations into a DataFrame.
-filtered_gw_coordinates = groundwater_coordinates[groundwater_coordinates['hzbnr01'].isin([int(i) for i in points_list])]
-
 # Creating a dataframe that stores all the associated features of the 487 stations.
 data = pd.DataFrame()
 
@@ -294,7 +292,6 @@ def add_nearest_coordinates_column(df_to_add, name, k, df_to_merge=None):
 
     return df
 
-
 data = add_nearest_coordinates_column(groundwater_temperature_coordinates, 'nearest_gw_temp', 1, df_to_merge=filtered_gw_coordinates)
 data = add_nearest_coordinates_column(rain_coordinates, 'nearest_rain', 20, df_to_merge=data)
 data = add_nearest_coordinates_column(snow_coordinates, 'nearest_snow', 15, df_to_merge=data)
@@ -308,8 +305,9 @@ data = add_nearest_coordinates_column(surface_water_flow_rate_coordinates, 'near
 data.drop(["x", "y"], axis=1, inplace=True)
 
 
-
-# Tarihler s?ral? bir ?ekilde ilerliyor mu onun kontrolü
+########################################################################################################################
+# Investigating the dataframes
+########################################################################################################################
 def is_monoton(dict):
     for df_name, value in dict.items():
         if value['Date'].is_monotonic_increasing == False:
@@ -327,7 +325,7 @@ is_monoton(river_temp_dict)
 is_monoton(sediment_dict)
 is_monoton(surface_water_flow_rate_dict)
 
-#jhuh
+
 def plot_row_count_distribution(df_dict):
     """
     Bu fonksiyon, verilen sözlükteki DataFrame'lerin sat?r say?lar?n?n da??l?m?n? histogram olarak çizer.
@@ -348,11 +346,6 @@ def plot_row_count_distribution(df_dict):
 plot_row_count_distribution(filtered_groundwater_dict)
 
 
-
-# print(f"{df_name} shape:\n{value.shape}\n")
-#             print(f"{df_name} missing values:\n{value.isnull().sum()}\n")
-
-# sat?r say?lar?na bakma
 shapes = []
 dates = []
 
@@ -372,15 +365,12 @@ for df_name, df in filtered_groundwater_dict.items():
     print(nan_rows)
 
 
+########################################################################################################################
 # Missing Values
-# SARIMA son
+########################################################################################################################
 deneme = gw_377887.copy()
-######################################################################################################################3
-import itertools
-import pandas as pd
-import matplotlib.pyplot as plt
-from statsmodels.tsa.statespace.sarimax import SARIMAX
 
+# SARIMA
 # Parametre kombinasyonlar?n? olu?turma
 p = d = q = range(0, 2)
 pdq = list(itertools.product(p, d, q))
@@ -420,12 +410,13 @@ deneme['values_filled'] = sarima_result.predict(start=deneme.index[0], end=denem
 
 deneme.drop(deneme.index[0:15], inplace=True)
 
+deneme['Predictions_lag1'] = deneme['values_filled'].shift(-1)
 
 # Sonuçlar? görselle?tirme
 plt.figure(figsize=(12, 6))
 plt.plot(deneme.index, deneme['Values'], label='Original Values', linestyle='--', color='blue')
-plt.plot(deneme.index, deneme['values_filled'], label='Filled Values', linestyle='-', color='red')
-plt.title('Original and Filled Values')
+plt.plot(deneme.index, deneme['Predictions_lag1'], label='Filled Values', linestyle='-', color='red')
+plt.title('Original and Filled Values, lag=-1, dünki SARIMA')
 plt.xlabel('Date')
 plt.ylabel('Values')
 plt.legend()
@@ -435,6 +426,69 @@ plt.tight_layout()
 plt.show()
 
 
+# SMAPE optimizasyonlu
+import itertools
+import numpy as np
+import pandas as pd
+from statsmodels.tsa.statespace.sarimax import SARIMAX
+
+# smape fonksiyonu
+def smape(y_true, y_pred):
+    return 100/len(y_true) * np.sum(2 * np.abs(y_pred - y_true) / (np.abs(y_true) + np.abs(y_pred)))
+
+# SARIMA modelini smape ile optimize eden fonksiyon
+def sarima_optimizer_smape(train, pdq, seasonal_pdq):
+    best_smape, best_order, best_seasonal_order = float("inf"), None, None
+    for param in pdq:
+        for param_seasonal in seasonal_pdq:
+            try:
+                model = SARIMAX(train, order=param, seasonal_order=param_seasonal)
+                sarima_model = model.fit(disp=0)
+                y_pred_test = sarima_model.predict(start=0, end=len(train)-1)
+                smape_val = smape(train.dropna(), y_pred_test[~train.isna()])
+                if smape_val < best_smape:
+                    best_smape, best_order, best_seasonal_order = smape_val, param, param_seasonal
+                print(f'SARIMA{param}x{param_seasonal}12 - sMAPE:{smape_val}')
+            except:
+                continue
+    print(f'Best SARIMA{best_order}x{best_seasonal_order}12 - sMAPE:{best_smape}')
+    return best_order, best_seasonal_order
+
+# Parametre kombinasyonlar?n? olu?turma
+p = d = q = range(0, 2)
+pdq = list(itertools.product(p, d, q))
+seasonal_pdq = [(x[0], x[1], x[2], 12) for x in list(itertools.product(p, d, q))]
+
+# Dataframe'i zaman serisine uygun hale getirme
+deneme['Date'] = pd.to_datetime(deneme['Date'])
+deneme.set_index('Date', inplace=True)
+
+# SARIMA modelini optimize etme
+best_order, best_seasonal_order = sarima_optimizer_smape(deneme['Values'], pdq, seasonal_pdq)
+
+# En iyi parametrelerle SARIMA modelini olu?turma
+model = SARIMAX(deneme['Values'], order=best_order, seasonal_order=best_seasonal_order)
+sarima_model = model.fit(disp=False)
+
+# Tüm de?erleri (NaN dahil) tahmin etme
+deneme['Predictions'] = sarima_model.predict(start=0, end=len(deneme)-1)
+
+# Güncellenmi? dataframe
+deneme.head()
 
 
+# Sonuçlar? görselle?tirme
+import matplotlib.pyplot as plt
 
+deneme.drop(deneme.index[0:5], inplace=True)
+deneme['Predictions_lag1'] = deneme['Predictions'].shift(-1)
+
+plt.figure(figsize=(10, 6))
+plt.plot(deneme.index, deneme['Values'], label='Gerçek De?erler', color='blue', linewidth=2)
+plt.plot(deneme.index, deneme['Predictions_lag1'], label='Tahminler', color='orange', linewidth=2)
+plt.title('Gerçek De?erler ve SARIMA Tahminlerii lag=-1, SMAP optimizasyonlu')
+plt.xlabel('Tarih')
+plt.ylabel('De?er')
+plt.xticks(rotation=45)
+plt.legend()
+plt.show()
