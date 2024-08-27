@@ -113,6 +113,7 @@ def to_dataframe(folder_path, tip_coordinates):
                         df = pd.DataFrame(data, columns=['Date', 'Values'])
                         df.drop(df.index[-1], inplace=True)  # Dropping the last row (2022-01-01)
                         df_name = f"{filename[-10:-4]}"
+
                         dataframes_dict[df_name] = df
 
                         # Convert keys to integers
@@ -134,6 +135,14 @@ def to_global(dataframes_dict, prefix=''):
     """
     for name, dataframe in dataframes_dict.items():
         globals()[f"{prefix}{name}"] = dataframe
+
+def to_monthly(df_dict):
+    for df_name, df_value in df_dict.items():
+        df_value['Date'] = pd.to_datetime(df_value['Date'])
+        df_value.set_index('Date', inplace=True)
+        df_dict[df_name] = df_value.resample('M').mean()  # Do?rudan sözlü?ü güncelle
+    return df_dict
+
 
 def filter_dataframes_by_points(dataframes_dict, points_list):
     """
@@ -181,14 +190,14 @@ precipitation_coordinates = station_coordinates("Precipitation")
 # Rain
 rain_folder_path = "Ehyd/datasets_ehyd/Precipitation/N-Tagessummen"
 rain_dict, rain_coordinates = to_dataframe(rain_folder_path, precipitation_coordinates)
-
-to_global(rain_dict, prefix="rain_")
+rain_dict_monthly = to_monthly(rain_dict)
+to_global(rain_dict_monthly, prefix="rain_")
 
 # Snow
 snow_folder_path = "Ehyd/datasets_ehyd/Precipitation/NS-Tagessummen"
 snow_dict, snow_coordinates = to_dataframe(snow_folder_path, precipitation_coordinates)
-
-to_global(snow_dict, prefix="snow_")
+snow_dict_monthly = to_monthly(snow_dict)
+to_global(snow_dict_monthly, prefix="snow_")
 
 
 ##################################### Sources
@@ -197,48 +206,46 @@ sources_coordinates = station_coordinates("Sources")
 # Flow Rate
 source_flow_rate_path = "Ehyd/datasets_ehyd/Sources/Quellschüttung-Tagesmittel"
 source_flow_rate_dict, source_flow_rate_coordinates = to_dataframe(source_flow_rate_path, sources_coordinates)
-
-to_global(source_flow_rate_dict, prefix="source_fr_")
+source_flow_rate_dict_monthly = to_monthly(source_flow_rate_dict)
+to_global(source_flow_rate_dict_monthly, prefix="source_fr_")
 
 # Conductivity
 conductivity_folder_path = "Ehyd/datasets_ehyd/Sources/Quellleitfähigkeit-Tagesmittel"
 conductivity_dict, conductivity_coordinates = to_dataframe(conductivity_folder_path, sources_coordinates)
-
-to_global(conductivity_dict, prefix="conductivity_")
+conductivity_dict_monthly = to_monthly(conductivity_dict)
+to_global(conductivity_dict_monthly, prefix="conductivity_")
 
 # Source Temperature
 source_temp_folder_path = "Ehyd/datasets_ehyd/Sources/Quellwassertemperatur-Tagesmittel"
 source_temp_dict, source_temp_coordinates = to_dataframe(source_temp_folder_path, sources_coordinates)
-
-to_global(source_temp_dict, prefix="source_temp_")
-
+source_temp_dict_monthly = to_monthly(source_temp_dict)
+to_global(source_temp_dict_monthly, prefix="source_temp_")
 
 ##################################### Surface Water
 
 surface_water_coordinates = station_coordinates("Surface_Water")
 
-# River Water Level
+# Surface Water Level
 surface_water_level_folder_path = "Ehyd/datasets_ehyd/Surface_Water/W-Tagesmittel"
 surface_water_level_dict, surface_water_level_coordinates = to_dataframe(surface_water_level_folder_path, surface_water_coordinates)
-
+surface_water_level_dict_monthly = to_monthly(surface_water_level_dict)
 to_global(surface_water_level_dict, prefix="surface_water_level")
 
 # Surface Water Temperature
 surface_water_temp_folder_path = "Ehyd/datasets_ehyd/Surface_Water/WT-Monatsmittel"
 river_temp_dict, river_temp_coordinates = to_dataframe(surface_water_temp_folder_path, surface_water_coordinates)
-
 to_global(river_temp_dict, prefix="surface_water_temp")
 
 # Sediment
 sediment_folder_path = "Ehyd/datasets_ehyd/Surface_Water/Schwebstoff-Tagesfracht"
-sediment_dict, sediment_coordinates = to_dataframe(sediment_folder_path, surface_water_coordinates)
-
-to_global(sediment_dict, prefix="sediment_")
+sediment_dict, sediment_coordinates = to_dataframe(sediment_folder_path, surface_water_coordinates)  # daily version
+sediment_dict_monthly = to_monthly(sediment_dict)
+to_global(sediment_dict_monthly, prefix="sediment_")
 
 # Surface Water Flow Rate
 surface_water_flow_rate_folder_path = "Ehyd/datasets_ehyd/Surface_Water/Q-Tagesmittel"
 surface_water_flow_rate_dict, surface_water_flow_rate_coordinates = to_dataframe(surface_water_flow_rate_folder_path, surface_water_coordinates)
-
+surface_water_flow_rate_dict_monthly = to_monthly(surface_water_flow_rate_dict)
 to_global(surface_water_flow_rate_dict, prefix="surface_water_fr_")
 
 ########################################################################################################################
@@ -366,7 +373,7 @@ for df_name, df in filtered_groundwater_dict.items():
 
 
 ########################################################################################################################
-# Missing Values
+# Imputing Missing Values with SARIMA()
 ########################################################################################################################
 deneme = gw_377887.copy()
 
@@ -416,7 +423,7 @@ deneme['Predictions_lag1'] = deneme['values_filled'].shift(-1)
 plt.figure(figsize=(12, 6))
 plt.plot(deneme.index, deneme['Values'], label='Original Values', linestyle='--', color='blue')
 plt.plot(deneme.index, deneme['Predictions_lag1'], label='Filled Values', linestyle='-', color='red')
-plt.title('Original and Filled Values, lag=-1, dünki SARIMA')
+plt.title('Original and Filled Values, lag=-1, SARIMA')
 plt.xlabel('Date')
 plt.ylabel('Values')
 plt.legend()
@@ -426,69 +433,3 @@ plt.tight_layout()
 plt.show()
 
 
-# SMAPE optimizasyonlu
-import itertools
-import numpy as np
-import pandas as pd
-from statsmodels.tsa.statespace.sarimax import SARIMAX
-
-# smape fonksiyonu
-def smape(y_true, y_pred):
-    return 100/len(y_true) * np.sum(2 * np.abs(y_pred - y_true) / (np.abs(y_true) + np.abs(y_pred)))
-
-# SARIMA modelini smape ile optimize eden fonksiyon
-def sarima_optimizer_smape(train, pdq, seasonal_pdq):
-    best_smape, best_order, best_seasonal_order = float("inf"), None, None
-    for param in pdq:
-        for param_seasonal in seasonal_pdq:
-            try:
-                model = SARIMAX(train, order=param, seasonal_order=param_seasonal)
-                sarima_model = model.fit(disp=0)
-                y_pred_test = sarima_model.predict(start=0, end=len(train)-1)
-                smape_val = smape(train.dropna(), y_pred_test[~train.isna()])
-                if smape_val < best_smape:
-                    best_smape, best_order, best_seasonal_order = smape_val, param, param_seasonal
-                print(f'SARIMA{param}x{param_seasonal}12 - sMAPE:{smape_val}')
-            except:
-                continue
-    print(f'Best SARIMA{best_order}x{best_seasonal_order}12 - sMAPE:{best_smape}')
-    return best_order, best_seasonal_order
-
-# Parametre kombinasyonlar?n? olu?turma
-p = d = q = range(0, 2)
-pdq = list(itertools.product(p, d, q))
-seasonal_pdq = [(x[0], x[1], x[2], 12) for x in list(itertools.product(p, d, q))]
-
-# Dataframe'i zaman serisine uygun hale getirme
-deneme['Date'] = pd.to_datetime(deneme['Date'])
-deneme.set_index('Date', inplace=True)
-
-# SARIMA modelini optimize etme
-best_order, best_seasonal_order = sarima_optimizer_smape(deneme['Values'], pdq, seasonal_pdq)
-
-# En iyi parametrelerle SARIMA modelini olu?turma
-model = SARIMAX(deneme['Values'], order=best_order, seasonal_order=best_seasonal_order)
-sarima_model = model.fit(disp=False)
-
-# Tüm de?erleri (NaN dahil) tahmin etme
-deneme['Predictions'] = sarima_model.predict(start=0, end=len(deneme)-1)
-
-# Güncellenmi? dataframe
-deneme.head()
-
-
-# Sonuçlar? görselle?tirme
-import matplotlib.pyplot as plt
-
-deneme.drop(deneme.index[0:5], inplace=True)
-deneme['Predictions_lag1'] = deneme['Predictions'].shift(-1)
-
-plt.figure(figsize=(10, 6))
-plt.plot(deneme.index, deneme['Values'], label='Gerçek De?erler', color='blue', linewidth=2)
-plt.plot(deneme.index, deneme['Predictions_lag1'], label='Tahminler', color='orange', linewidth=2)
-plt.title('Gerçek De?erler ve SARIMA Tahminlerii lag=-1, SMAP optimizasyonlu')
-plt.xlabel('Tarih')
-plt.ylabel('De?er')
-plt.xticks(rotation=45)
-plt.legend()
-plt.show()
