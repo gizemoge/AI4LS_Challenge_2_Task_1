@@ -539,8 +539,6 @@ with open('filled_rain_dict.pkl', 'wb') as f:
 ############################# TURSUDAN SONRASINI ÇALI?TIRAB?L?R?Z #############################################
 ###############################################################################################################
 ###############################################################################################################
-
-
 # Pickle dosyalar?n? toplu açma i?lemi:
 pkl_files = [f for f in os.listdir() if f.endswith('.pkl')]
 
@@ -550,48 +548,8 @@ for pkl_file in pkl_files:
         globals()[var_name] = pickle.load(file)
 
 data = pd.read_csv("data.csv")
-data.shape
 
-
-###################################################
-# Birden fazla sözlükten belirli bir ay?n 'val' sütunlar?n? toplamak için bir fonksiyon
-def get_monthly_vals(dict_list, year, month):
-    monthly_vals = []
-    for data_dict in dict_list:
-        for df_name, df in data_dict.items():
-            df.index = pd.to_datetime(df.index)  # Tarih indeksine sahip oldu?undan emin olun
-            monthly_data = df[(df.index.year == year) & (df.index.month == month)]['target']
-            monthly_vals.append(monthly_data)
-
-    # Tüm 'target' sütunlar?n? birle?tir ve döndür
-    return pd.concat(monthly_vals, axis=1)
-
-
-# Sözlüklerin listesini olu?turun
-dict_list = [
-    filled_conductivity_dict,
-    filled_data_gw_temp_dict,
-    filled_groundwater_dict,
-    filled_rain_dict,
-    filled_sediment_dict_monthly,
-    filled_snow_dict_monthly,
-    filled_source_flow_rate_dict,
-    filled_source_temp_dict,
-    filled_surface_water_flow_rate_dict_monthly,
-    filled_surface_water_level_dict_monthly,
-    filled_surface_water_temp_dict
-]
-
-# Örne?in, 2023 y?l? Ocak ay? verilerini almak için
-monthly_vals = get_monthly_vals(dict_list, 2023, 1)
 #######################################################################
-
-# nearest_rain][0:2]
-
-
-# first_key_value_pair = next(iter(updated_dfs.items()))
-
-
 
 # 0. lstm'ye girecek ayl?k dataseti iskeletlerini haz?rla
 # 1. bu a?a??dakileri dene,
@@ -600,88 +558,7 @@ monthly_vals = get_monthly_vals(dict_list, 2023, 1)
 # 4. lstm'ye girecek final verisetine o sütunu koy ya?mur için.
 # 5. bunu kar, sediment vs için de yap.
 
-
-
-def add_features_to_series_dict(series_dict, lag=1, rolling_window=6):
-    """
-    Bu fonksiyon, verilen sözlükteki her Series'e lag ve rolling mean özelliklerini ekler.
-    Ayr?ca, tüm Series'lerdeki float64 sütunlar?n? float32'ye dönü?türür.
-
-    Parameters:
-    - series_dict: Series'lerin bulundu?u sözlük
-    - lag: Lag özellikleri için lag uzunlu?u
-    - rolling_window: Rolling mean için pencere uzunlu?u
-
-    Returns:
-    - Güncellenmi? DataFrame'lerin bulundu?u sözlük
-    """
-
-    """
-    def add_lag_features(df, lag):
-        for i in range(1, lag + 1):
-            df[f'lag_{i}'] = df['Value'].shift(i)
-        return df
-
-    def add_rolling_mean(df, window):
-        # Ensure the 'Value' column is in float64 for calculations
-        df['Value'] = df['Value'].astype('float64')
-        df[f'rolling_mean_{window}'] = df['Value'].rolling(window=window).mean()
-        return df
-    """
-
-    def add_lagged_rolling_features(df, lag, window):
-        for i in range(1, lag + 1):
-            df['Value'] = df['Value'].astype('float64')
-            df[f'rolling_mean_{window}_lag_{i}'] = df['Value'].shift(i).rolling(window=window).mean()
-        return df
-
-    def convert_float_to_float32(df):
-        float_cols = df.select_dtypes(include=['float64']).columns
-        df[float_cols] = df[float_cols].astype('float32')
-        return df
-
-    updated_dfs_dict = {}
-
-    for name, series in series_dict.items():
-        # DataFrame'e dönü?tür ve index'i koru
-        df = series.to_frame(name='Value')
-        df.index = pd.to_datetime(df.index, errors='coerce')  # Index tarih format?na dönü?tür
-
-        # Özellikleri ekle
-        df = add_lagged_rolling_features(df, lag, rolling_window)
-
-        # Sonuçlar? float32'ye dönü?tür
-        df = convert_float_to_float32(df)
-
-        # Sonucu DataFrame olarak sakla
-        updated_dfs_dict[name] = df
-
-    return updated_dfs_dict
-
-dict_list = [filled_conductivity_dict, filled_data_gw_temp_dict, filled_groundwater_dict, filled_rain_dict,
-             filled_sediment_dict_monthly, filled_snow_dict_monthly, filled_source_flow_rate_dict,
-             filled_source_temp_dict, filled_surface_water_flow_rate_dict_monthly,
-             filled_surface_water_level_dict_monthly, filled_surface_water_temp_dict]
-
-for filled_dict in dict_list:
-    updated_dfs = add_features_to_series_dict(filled_dict, lag=1, rolling_window=6)
-
-# Güncellenmi? DataFrame'leri kontrol edelim
-for name, df in updated_dfs.items():
-    print(f"\n{name}:\n", df.head(20))
-    print(f"Data types:\n{df.dtypes}")
-
-
-################################################ BURDAN BA?LADIM
-key_counts = Counter(updated_dfs.keys())
-sorted_key_counts = key_counts.most_common()
-for key, count in sorted_key_counts:
-    print(f"{key}: {count}")
-
-num_unique_keys = len(updated_dfs.keys())
-print(f"Sözlükte {num_unique_keys} benzersiz anahtar var.") # 322
-#
-
+#######################################################################
 # sözlüklerin içindeki serileri dataframe yap?yorum.
 dict_list = [filled_conductivity_dict, filled_data_gw_temp_dict, filled_groundwater_dict, filled_rain_dict,
              filled_sediment_dict_monthly, filled_snow_dict_monthly, filled_source_flow_rate_dict,
@@ -690,7 +567,15 @@ dict_list = [filled_conductivity_dict, filled_data_gw_temp_dict, filled_groundwa
 
 
 # Dict list içindeki her bir sözlü?ün value'lar?n? DataFrame yapacak fonksiyon
+
 def convert_series_to_dataframe(d):
+    """
+    Dict_list al?yor, geziyor, yani 11 dataframe'de geziyor. O sözlüklerdeki serileri a?a??da df'e çeviriyor.
+    Key dedi?i index asl?nda.
+    Args:
+        d: dict_list
+    Returns:
+    """
     for key in d:
         d[key] = d[key].to_frame(name=key)
     return d
@@ -698,19 +583,53 @@ def convert_series_to_dataframe(d):
 for i in range(len(dict_list)):
     dict_list[i] = convert_series_to_dataframe(dict_list[i])
 
+data.head()
+
+points  gw_level    4_1_original    4_1_lag1    4_1_lag2   4_2_original    4_2_lag1
+...      4.3
+300485   10.5
+300486    13.2
+300487
+
+final_df[haznbr] = data[haznbr]
+487 x 1
+
+concat gw_level  left
+concat rain
+
+
+
+def convert_series_to_dataframe(d, dict_name):
+    for key in d:
+        d[key] = d[key].to_frame(name=f"{dict_name}_{key}")
+    return d
+
+for i in range(len(dict_list)):
+    dict_name = f"{i}"  # dict_list içindeki her sözlük için bir isim olusturabilirsiniz, ya da uygun isimler zaten varsa onlar? kullanabilirsiniz.
+    dict_list[i] = convert_series_to_dataframe(dict_list[i], dict_name)
+
+# Güncellenmi? sözlükleri kontrol et
+for key, df in filled_rain_dict.items():
+    print(f"{key}:")
+    print(df.tail(15))  # Ba?lang?çta birkaç sat?r? gösterir
+    print()
+
+#####
+
+
+###############33
 
 # Lag ve rolling mean hesaplamalar?n? gerçekle?tirecek fonksiyon
 def add_lag_and_rolling_mean(df, window=6):
     # ?lk sütunun ad?n? al
-    column_name = df.columns[0]
+    column_name = df.columns[0] "Original_value"
 
     # 1 lag'li versiyonu ekle
     df[f'{column_name}_lag_1'] = df[column_name].shift(1)
 
     # Lag'li ve rolling mean sütunlar?n? ekle
     for i in range(1, 2):  # Burada 1 lag'li oldu?u için range(1, 2) kullan?yoruz.
-        df[f'rolling_mean_{window}_lag_{i}'] = df[column_name].shift(i).rolling(window=window).mean()
-
+        df[f'{column_name}_rolling_mean_{window}_lag_{i}'] = df[column_name].shift(i).rolling(window=window).mean()
     return df
 
 
@@ -718,19 +637,17 @@ for d in dict_list:
     for key, df in d.items():
         d[key] = add_lag_and_rolling_mean(df)
 
-filled_rain_dict  # rolling mean datan?n kendisinden yap?ld?!!!!
 
-###########
-# zero padding
 def zero_padding(df, start_date='1960-01-01'):
-    # Tarih indeksini datetime format?na dönü?tür
-    df.index = pd.to_datetime(df.index)
+    # E?er indeks zaten PeriodIndex de?ilse, to_period('M') yap
+    if not isinstance(df.index, pd.PeriodIndex):
+        df.index = df.index.to_period('M')
 
     # Belirlenen ba?lang?ç tarihi
-    start_date = pd.to_datetime(start_date)
+    start_date = pd.to_datetime(start_date).to_period('M')
 
     # Tarih aral???n? geni?let
-    all_dates = pd.date_range(start=start_date, end=df.index.max(), freq='ME')
+    all_dates = pd.period_range(start=start_date, end=df.index.max(), freq='M')
 
     # Yeni tarih aral??? için bo? bir veri çerçevesi olu?tur
     new_df = pd.DataFrame(index=all_dates)
@@ -738,8 +655,10 @@ def zero_padding(df, start_date='1960-01-01'):
     # Eski veri çerçevesini yeni veri çerçevesine birle?tir
     new_df = new_df.join(df, how='left').fillna(0)
 
-    return new_df
+    # Periyotlar? datetime'e dönü?tür
+    new_df.index = new_df.index.to_timestamp()
 
+    return new_df
 
 # Her bir sözlükteki veri çerçevelerini güncelleme
 for dictionary in dict_list:
@@ -747,15 +666,14 @@ for dictionary in dict_list:
         dictionary[key] = zero_padding(dictionary[key])
 
 # Güncellenmi? sözlükleri kontrol et
-for dictionary in dict_list:
-    for key, df in dictionary.items():
-        print(f"{key}:")
-        print(df.head(15))  # Ba?lang?çta birkaç sat?r? gösterir
-        print()
+for key, df in filled_snow_dict_monthly.items():
+    print(f"{key}:")
+    print(df.tail(15))  # Ba?lang?çta birkaç sat?r? gösterir
+    print()
 
 
 ###############
-# alay?n? float32 yap
+# 11 sözlükteki tüm dataframe'lerin tüm kolonlar?n? float32'ye çevirme
 def convert_to_float32(df):
     return df.astype('float32')
 
@@ -766,7 +684,7 @@ for dictionary in dict_list:
         dictionary[key] = convert_to_float32(dictionary[key])
 
 
-# check etmek için
+# float 32 check etmek için
 def check_dtypes(df):
     return df.dtypes
 # Güncellenmi? veri çerçevelerinin veri tiplerini kontrol etme
@@ -782,7 +700,26 @@ for dictionary in dict_list:
 # kafamdaki plan:
 #### 487 dataframe yapal?m ve bir listeye alal?m ya da tam tersi 720 tanesini al?p bir listeye koyal?m ( bu daha mant?kl? çünkü sonra transpose'unu almak zorunda kalmay?z)
 
+###################################################
+# Birden fazla sözlükten belirli bir ay?n 'val' sütunlar?n? toplamak için bir fonksiyon
 
+def get_monthly_vals(dict_list, year, month):
+    monthly_vals = []
+    for data_dict in dict_list:
+        for df_name, df in data_dict.items():
+            df.index = pd.to_datetime(df.index)  # Tarih indeksine sahip oldu?undan emin olun
+            for i in df.columns:
+                monthly_data = df[(df.index.year == year) & (df.index.month == month)][i]
+                monthly_vals.append(monthly_data)
+    if monthly_vals:
+        return pd.concat(monthly_vals, axis=1)
+    else:
+        return pd.DataFrame()
+
+
+# Örne?in, 2023 y?l? Ocak ay? verilerini almak için
+monthly_vals = get_monthly_vals(dict_list, 2021, 12)
+monthly_vals.shape
 #### Normalizasyon yani scaling yapmam?z gerek
 
 
