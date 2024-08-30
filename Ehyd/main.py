@@ -6,6 +6,7 @@ warnings.simplefilter('ignore', category=ConvergenceWarning)
 import pandas as pd
 from datetime import datetime
 from scipy.spatial import distance
+from collections import Counter
 import seaborn as sns
 import itertools
 import pickle
@@ -21,6 +22,10 @@ pd.set_option('display.max_rows', None)
 pd.set_option('display.float_format', lambda x: '%.3f' % x)
 pd.set_option('display.max_colwidth', None)
 pd.set_option('display.width', 500)
+from sklearn.model_selection import train_test_split
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense
+
 
 
 # FUNCTIONS
@@ -578,32 +583,13 @@ dict_list = [
 ]
 
 # Örne?in, 2023 y?l? Ocak ay? verilerini almak için
-monthly_vals = getmonthly_vals(dict_list, 2023, 1)
+monthly_vals = get_monthly_vals(dict_list, 2023, 1)
 #######################################################################
 
-en yak?n:
-conductivity 1
-gw_temp 1
-rain 3
-sediment 1
-snow 3
-source_flow_rate 1
-source_temp 1
-surface_water_flow_rate 3
-surface_water_level 3
-surface_water_temp 1
+# nearest_rain][0:2]
 
 
-nearest_rain][0:2]
-
-
-
-
-
-
-
-
-first_key_value_pair = next(iter(updated_dfs.items()))
+# first_key_value_pair = next(iter(updated_dfs.items()))
 
 
 
@@ -614,16 +600,6 @@ first_key_value_pair = next(iter(updated_dfs.items()))
 # 4. lstm'ye girecek final verisetine o sütunu koy ya?mur için.
 # 5. bunu kar, sediment vs için de yap.
 
-for df_name, df in filled_rain_dict.items():
-    df["Lag_1"] = df["Values"].shift(1)
-    df["Lag_2"] = df["Values"].shift(2)
-    df["Lag_3"] = df["Values"].shift(3)
-    df["1_month_0_lag"] = df["Values"]
-    df["1_month_1_lag"]
-    df["1_month_2_lag"]
-    df["6_month_0_lag"]
-    df["6_month_1_lag"]
-    df["6_month_2_lag"]
 
 
 def add_features_to_series_dict(series_dict, lag=1, rolling_window=6):
@@ -694,5 +670,162 @@ for filled_dict in dict_list:
 for name, df in updated_dfs.items():
     print(f"\n{name}:\n", df.head(20))
     print(f"Data types:\n{df.dtypes}")
+
+
+################################################ BURDAN BA?LADIM
+key_counts = Counter(updated_dfs.keys())
+sorted_key_counts = key_counts.most_common()
+for key, count in sorted_key_counts:
+    print(f"{key}: {count}")
+
+num_unique_keys = len(updated_dfs.keys())
+print(f"Sözlükte {num_unique_keys} benzersiz anahtar var.") # 322
+#
+
+# sözlüklerin içindeki serileri dataframe yap?yorum.
+dict_list = [filled_conductivity_dict, filled_data_gw_temp_dict, filled_groundwater_dict, filled_rain_dict,
+             filled_sediment_dict_monthly, filled_snow_dict_monthly, filled_source_flow_rate_dict,
+             filled_source_temp_dict, filled_surface_water_flow_rate_dict_monthly,
+             filled_surface_water_level_dict_monthly, filled_surface_water_temp_dict]
+
+
+# Dict list içindeki her bir sözlü?ün value'lar?n? DataFrame yapacak fonksiyon
+def convert_series_to_dataframe(d):
+    for key in d:
+        d[key] = d[key].to_frame(name=key)
+    return d
+
+for i in range(len(dict_list)):
+    dict_list[i] = convert_series_to_dataframe(dict_list[i])
+
+
+# Lag ve rolling mean hesaplamalar?n? gerçekle?tirecek fonksiyon
+def add_lag_and_rolling_mean(df, window=6):
+    # ?lk sütunun ad?n? al
+    column_name = df.columns[0]
+
+    # 1 lag'li versiyonu ekle
+    df[f'{column_name}_lag_1'] = df[column_name].shift(1)
+
+    # Lag'li ve rolling mean sütunlar?n? ekle
+    for i in range(1, 2):  # Burada 1 lag'li oldu?u için range(1, 2) kullan?yoruz.
+        df[f'rolling_mean_{window}_lag_{i}'] = df[column_name].shift(i).rolling(window=window).mean()
+
+    return df
+
+
+for d in dict_list:
+    for key, df in d.items():
+        d[key] = add_lag_and_rolling_mean(df)
+
+filled_rain_dict  # rolling mean datan?n kendisinden yap?ld?!!!!
+
+###########
+# zero padding
+def zero_padding(df, start_date='1960-01-01'):
+    # Tarih indeksini datetime format?na dönü?tür
+    df.index = pd.to_datetime(df.index)
+
+    # Belirlenen ba?lang?ç tarihi
+    start_date = pd.to_datetime(start_date)
+
+    # Tarih aral???n? geni?let
+    all_dates = pd.date_range(start=start_date, end=df.index.max(), freq='ME')
+
+    # Yeni tarih aral??? için bo? bir veri çerçevesi olu?tur
+    new_df = pd.DataFrame(index=all_dates)
+
+    # Eski veri çerçevesini yeni veri çerçevesine birle?tir
+    new_df = new_df.join(df, how='left').fillna(0)
+
+    return new_df
+
+
+# Her bir sözlükteki veri çerçevelerini güncelleme
+for dictionary in dict_list:
+    for key in dictionary:
+        dictionary[key] = zero_padding(dictionary[key])
+
+# Güncellenmi? sözlükleri kontrol et
+for dictionary in dict_list:
+    for key, df in dictionary.items():
+        print(f"{key}:")
+        print(df.head(15))  # Ba?lang?çta birkaç sat?r? gösterir
+        print()
+
+
+###############
+# alay?n? float32 yap
+def convert_to_float32(df):
+    return df.astype('float32')
+
+# Her bir sözlükteki veri çerçevelerini veri tipini float32'ye çevirme
+for dictionary in dict_list:
+    for key in dictionary:
+        # Veri tipini float32'ye çevir
+        dictionary[key] = convert_to_float32(dictionary[key])
+
+
+# check etmek için
+def check_dtypes(df):
+    return df.dtypes
+# Güncellenmi? veri çerçevelerinin veri tiplerini kontrol etme
+for dictionary in dict_list:
+    for key, df in dictionary.items():
+        print(f"{key}:")
+        print("Data Types:")
+        print(check_dtypes(df))  # Veri tiplerini kontrol eder
+        print()
+
+
+#### dataframe'leri indexlerine göre birle?tirece?im için hepsinde t?pat?p ayn? indeks mi var ona bakaca??m
+# kafamdaki plan:
+#### 487 dataframe yapal?m ve bir listeye alal?m ya da tam tersi 720 tanesini al?p bir listeye koyal?m ( bu daha mant?kl? çünkü sonra transpose'unu almak zorunda kalmay?z)
+
+
+#### Normalizasyon yani scaling yapmam?z gerek
+
+
+#### LSTM - omg it's happening
+# 1. Veri Haz?rl???
+# Örnek veri yükleme
+# 'dataframes' bir liste olarak tüm DataFrame'lerinizi içerir
+dataframes = [df1, df2, ..., df487]  # Burada df1, df2, ..., df487 yerlerine gerçek DataFrame'lerinizi koymal?s?n?z
+
+# DataFrame'leri numpy array'lerine dönü?türüp birle?tirin
+data = np.array([df.values for df in dataframes])  # (487, 720, 5)
+
+# Veriyi (720, 487, 5) format?na dönü?türün
+data = data.transpose(1, 0, 2)  # (720, 487, 5)  # modelin zaman serisi oldu?unu anlamas? için bu gerek
+
+# 2. Pencereleme
+def create_windows(data, window_size, forecast_horizon):
+    X, y = [], []
+    num_time_steps = data.shape[0]
+
+    for start in range(num_time_steps - window_size - forecast_horizon + 1):
+        end = start + window_size
+        X.append(data[start:end, :, :])
+        y.append(data[end:end + forecast_horizon, :, :])
+
+    return np.array(X), np.array(y)
+
+
+window_size = 12 # window size'? hala tam olarak anlayamad?m
+forecast_horizon = 26 # önümüzdeli 26 ay? tahmin edece?iz
+X, y = create_windows(data, window_size, forecast_horizon)  # X: (672, 12, 487, 5), y: (672, 26, 487, 5)
+
+# 3. E?itim ve Test Setlerine Bölme
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
+
+# 4. LSTM Modelini Olu?turma ve E?itme
+model = Sequential()
+model.add(LSTM(units=50, return_sequences=True, input_shape=(window_size, data.shape[1], data.shape[2])))
+model.add(LSTM(units=50, return_sequences=True))
+model.add(Dense(data.shape[2]))  # Ç?k?? katman?, tahmin edilmesi gereken sütun say?s?na göre ayarlanmal?
+model.compile(optimizer='adam', loss='mse')
+
+# Modeli e?itme
+history = model.fit(X_train, y_train, epochs=50, batch_size=32, validation_data=(X_test, y_test))
 
 
