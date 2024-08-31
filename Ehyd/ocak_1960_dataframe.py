@@ -148,8 +148,7 @@ for index in new_df.index:
         # Sözlükte anahtar bulunmazsa hata mesaj? yazd?r?yoruz
         print(f"Warning: Key '{str_index}' not found in filled_groundwater_dict")
 
-# GROUNWATER TEMPEERAURE
-import ast
+# GROUNDWATER TEMPERATURE
 
 # Yeni kolonlar? ba?lat?yoruz
 new_df['gw_temp'] = None
@@ -737,5 +736,4 @@ for index in new_df.index:
 #
 # # Sonuç olarak new_df'i görüntüleyelim
 # new_df.head()
-
 

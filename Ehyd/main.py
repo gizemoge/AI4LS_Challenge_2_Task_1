@@ -686,7 +686,7 @@ monthly_vals.shape
 dataframes = [df1, df2, ..., df487]
 
 # DataFrame'leri numpy array'lerine dönü?türüp birle?tirin
-data = np.array([df.values for df in dataframes])  # (720, 487, 5)
+data = np.array([df.values for df in dataframes])  # (720, 487, 57)
 
 # 2. Pencereleme
 def create_windows(data, window_size, forecast_horizon):
