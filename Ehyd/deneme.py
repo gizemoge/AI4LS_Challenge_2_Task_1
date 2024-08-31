@@ -308,9 +308,16 @@ for month in range(720):
 
 #####################################################3
 
+import numpy as np
+import ast
+import pandas as pd
+
+
 def get_values(index, nearest_col, data_dict, num_items=3):
     nearest_str = data.loc[data['hzbnr01'] == index, nearest_col].values
-    if nearest_str:
+
+    # Explicitly check if the array is not empty
+    if nearest_str.size > 0:
         nearest_list = ast.literal_eval(nearest_str[0])
         values = []
         for i in range(num_items):
@@ -318,6 +325,7 @@ def get_values(index, nearest_col, data_dict, num_items=3):
             relevant_df = data_dict.get(str_index, pd.DataFrame([[None, None, None]]))
             values.extend(relevant_df.iloc[0, :3].values)
         return values
+
     return [None] * (3 * num_items)
 
 
@@ -410,3 +418,31 @@ for month in range(720):
     all_dataframes.append(new_df)
 
 all_dataframes[0]
+
+# 7.11 -- üsttekinde hata ald?k bugün none'lar?, error'u gpt'ye düzelttirip yeniden çal??t?rd?m
+# 20 dk sürdü ve düzelmedi
+
+
+# main'den getirdiklerim
+###################################################
+# Birden fazla sözlükten belirli bir ay?n 'val' sütunlar?n? toplamak için bir fonksiyon
+
+def get_monthly_vals(dict_list, year, month):
+    monthly_vals = []
+    for data_dict in dict_list:
+        for df_name, df in data_dict.items():
+            df.index = pd.to_datetime(df.index)  # Tarih indeksine sahip oldu?undan emin olun
+            for i in df.columns:
+                monthly_data = df[(df.index.year == year) & (df.index.month == month)][i]
+                monthly_vals.append(monthly_data)
+    if monthly_vals:
+        return pd.concat(monthly_vals, axis=1)
+    else:
+        return pd.DataFrame()
+
+
+# Örne?in, 2023 y?l? Ocak ay? verilerini almak için
+monthly_vals = get_monthly_vals(dict_list, 2021, 12)
+monthly_vals.shape
+#### Normalizasyon yani scaling yapmam?z gerek
+####################################################

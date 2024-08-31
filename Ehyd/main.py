@@ -12,6 +12,7 @@ import itertools
 import pickle
 import pandas as pd
 import numpy as np
+from sklearn.preprocessing import MinMaxScaler
 import matplotlib.pyplot as plt
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 import matplotlib
@@ -584,7 +585,7 @@ def add_lag_and_rolling_mean(df, window=6):
     df[f'lag_1'] = df[column_name].shift(1)
     # Lag'li ve rolling mean sütunlar?n? ekle
     for i in range(1, 2):  # Burada 1 lag'li oldu?u için range(1, 2) kullan?yoruz.
-        df[f'rolling_mean_{window}_lag_{i}'] = df[column_name].shift(i).rolling(window=window).mean()
+        df[f'rolling_mean_{window}_lag_{i}'] = df[f'lag_1'].shift(i).rolling(window=window).mean()
     return df
 
 
@@ -620,14 +621,7 @@ for dictionary in dict_list:
     for key in dictionary:
         dictionary[key] = zero_padding(dictionary[key])
 
-# # Güncellenmi? sözlükleri kontrol et
-# for key, df in filled_snow_dict_monthly.items():
-#     print(f"{key}:")
-#     print(df.tail(15))  # Ba?lang?çta birkaç sat?r? gösterir
-#     print()
 
-
-###############
 # 11 sözlükteki tüm dataframe'lerin tüm kolonlar?n? float32'ye çevirme
 def convert_to_float32(df):
     return df.astype('float32')
@@ -639,54 +633,155 @@ for dictionary in dict_list:
         dictionary[key] = convert_to_float32(dictionary[key])
 
 
-# # float 32 check etmek için
-# def check_dtypes(df):
-#     return df.dtypes
-# # Güncellenmi? veri çerçevelerinin veri tiplerini kontrol etme
-# for dictionary in dict_list:
-#     for key, df in dictionary.items():
-#         print(f"{key}:")
-#         print("Data Types:")
-#         print(check_dtypes(df))  # Veri tiplerini kontrol eder
-#         print()
+################ 720 dataframe
+list_of_dfs = []
+
+# 720 ay için döngü
+for month in range(720):
+
+    index_values = data['hzbnr01']
+    new_df = pd.DataFrame(index=index_values)
+
+    # gw
+    new_df['gw_level'] = None
+    new_df['gw_level_lag_1'] = None
+    new_df['gw_level_rolling_mean_6_lag_1'] = None
+
+    for index in new_df.index:
+        # ?ndeksi string'e çeviriyoruz
+        str_index = str(index)
+
+        # E?er sözlükte anahtar mevcutsa, ilgili DataFrame'i al?yoruz
+        if str_index in filled_groundwater_dict:
+            relevant_df = filled_groundwater_dict[str_index]
+
+            # ?lk sat?rdaki tüm de?erleri al?yoruz
+            first_row = relevant_df.iloc[0]
+
+            # Bu de?erleri new_df'deki ilgili sat?rlara ekliyoruz
+            new_df.at[index, 'gw_level'] = first_row.iloc[0]  # ?lk kolonun de?eri
+            new_df.at[index, 'gw_level_lag_1'] = first_row.iloc[1]  # ?kinci kolonun de?eri
+            new_df.at[index, 'gw_level_rolling_mean_6_lag_1'] = first_row.iloc[2]  # Üçüncü kolonun de?eri
+        else:
+            # Sözlükte anahtar bulunmazsa hata mesaj? yazd?r?yoruz
+            print(f"Warning: Key '{str_index}' not found in filled_groundwater_dict")
+
+    # birliler
+    def for_one_point(new_df, data, filled_dict, nearest_column, variable_type):
+        # Yeni kolonlar? ba?lat?yoruz
+        new_df[f'{variable_type}'] = None
+        new_df[f'{variable_type}_lag_1'] = None
+        new_df[f'{variable_type}_rolling_mean_6_lag_1'] = None
+
+        # Tüm indekslerde dola??yoruz
+        for index in new_df.index:
+            # data DataFrame'inde hzbnr01 ile e?le?en nearest_column listesini al?yoruz
+            nearest_list_str = data.loc[data['hzbnr01'] == index, nearest_column].values
+
+            # E?er nearest_list_str bo? de?ilse
+            if len(nearest_list_str) > 0:
+                # nearest_column listesinin string de?erini gerçek listeye dönü?türüyoruz
+                nearest_list = ast.literal_eval(nearest_list_str[0])
+
+                # nearest_column listesinin ilk eleman?n? al?yoruz
+                if len(nearest_list) > 0:
+                    str_index = str(nearest_list[0])  # Tek eleman? string'e çeviriyoruz
+
+                    # Eleman için
+                    if str_index in filled_dict:
+                        relevant_df = filled_dict[str_index]
+                        if len(relevant_df) > 0:
+                            new_df.at[index, f'{variable_type}'] = relevant_df.iloc[
+                                0, 0]  # ?lk sat?r?n ilk kolon de?eri
+                        if len(relevant_df.columns) > 1:
+                            new_df.at[index, f'{variable_type}_lag_1'] = relevant_df.iloc[
+                                0, 1]  # ?lk sat?r?n ikinci kolon de?eri
+                        if len(relevant_df.columns) > 2:
+                            new_df.at[index, f'{variable_type}_rolling_mean_6_lag_1'] = relevant_df.iloc[
+                                0, 2]  # ?lk sat?r?n üçüncü kolon de?eri
+                    else:
+                        print(f"Warning: Key '{str_index}' not found in {variable_type} dictionary")
+            else:
+                print(f"Warning: No {nearest_column} list found for index '{index}'")
+
+        return new_df
+
+    new_df = for_one_point(new_df, data, filled_data_gw_temp_dict, 'nearest_gw_temp', 'gw_temp')
+    new_df = for_one_point(new_df, data, filled_conductivity_dict, 'nearest_conductivity', 'conductivity')
+    new_df = for_one_point(new_df, data, filled_source_flow_rate_dict, 'nearest_source_fr', 'source_fr')
+    new_df = for_one_point(new_df, data, filled_source_temp_dict, 'nearest_source_temp', 'source_temp')
+    new_df = for_one_point(new_df, data, filled_surface_water_temp_dict, 'nearest_owf_temp', 'owf_temp')
+    new_df = for_one_point(new_df, data, filled_sediment_dict_monthly, 'nearest_sediment', 'sediment')
+
+    # üçlüler
+    def for_three_points(new_df, data, filled_dict, nearest_column, variable_type):
+        # Yeni kolonlar ba?lat?l?yor
+        for i in range(1, 4):
+            new_df[f'{variable_type}_{i}'] = None
+            new_df[f'{variable_type}_{i}_lag_1'] = None
+            new_df[f'{variable_type}_{i}_rolling_mean_6_lag_1'] = None
+
+        # Tüm indekslerde dola??yoruz
+        for index in new_df.index:
+            # data DataFrame'inde hzbnr01 ile e?le?en nearest_column listesini al?yoruz
+            nearest_list_str = data.loc[data['hzbnr01'] == index, nearest_column].values
+
+            # E?er nearest_list_str bo? de?ilse
+            if len(nearest_list_str) > 0:
+                # nearest_column listesinin string de?erini gerçek listeye dönü?türüyoruz
+                nearest_list = ast.literal_eval(nearest_list_str[0])
+
+                # nearest_column listesinin ilk üç eleman?n? al?yoruz
+                for i in range(min(3, len(nearest_list))):
+                    str_index = str(nearest_list[i])  # Eleman? string'e çeviriyoruz
+
+                    # Eleman için
+                    if str_index in filled_dict:
+                        relevant_df = filled_dict[str_index]
+                        if len(relevant_df) > 0:
+                            new_df.at[index, f'{variable_type}_{i + 1}'] = relevant_df.iloc[
+                                0, 0]  # ?lk sat?r?n ilk kolon de?eri
+                        if len(relevant_df.columns) > 1:
+                            new_df.at[index, f'{variable_type}_{i + 1}_lag_1'] = relevant_df.iloc[
+                                0, 1]  # ?lk sat?r?n ikinci kolon de?eri
+                        if len(relevant_df.columns) > 2:
+                            new_df.at[index, f'{variable_type}_{i + 1}_rolling_mean_6_lag_1'] = relevant_df.iloc[
+                                0, 2]  # ?lk sat?r?n üçüncü kolon de?eri
+                    else:
+                        print(f"Warning: Key '{str_index}' not found in {variable_type} dictionary")
+            else:
+                print(f"Warning: No {nearest_column} list found for index '{index}'")
+
+        return new_df
 
 
-#### dataframe'leri indexlerine göre birle?tirece?im için hepsinde t?pat?p ayn? indeks mi var ona bakaca??m
-# kafamdaki plan:
-#### 487 dataframe yapal?m ve bir listeye alal?m ya da tam tersi 720 tanesini al?p bir listeye koyal?m ( bu daha mant?kl? çünkü sonra transpose'unu almak zorunda kalmay?z)
+    new_df = for_three_points(new_df, data, filled_rain_dict, 'nearest_rain', 'rain')
+    new_df = for_three_points(new_df, data, filled_snow_dict_monthly, 'nearest_snow', 'snow')
+    new_df = for_three_points(new_df, data, filled_surface_water_level_dict_monthly, 'nearest_owf_level', 'owf_level')
+    new_df = for_three_points(new_df, data, filled_surface_water_flow_rate_dict_monthly, 'nearest_owf_fr', 'owf_fr')
 
 
-###################################################
-# Birden fazla sözlükten belirli bir ay?n 'val' sütunlar?n? toplamak için bir fonksiyon
+    # Listeye ekliyoruz
+    list_of_dfs.append(new_df)
 
-def get_monthly_vals(dict_list, year, month):
-    monthly_vals = []
-    for data_dict in dict_list:
-        for df_name, df in data_dict.items():
-            df.index = pd.to_datetime(df.index)  # Tarih indeksine sahip oldu?undan emin olun
-            for i in df.columns:
-                monthly_data = df[(df.index.year == year) & (df.index.month == month)][i]
-                monthly_vals.append(monthly_data)
-    if monthly_vals:
-        return pd.concat(monthly_vals, axis=1)
-    else:
-        return pd.DataFrame()
+# list_of_dfs tur?usu kuruldu
+with open('list_of_dfs.pkl', 'wb') as f:
+    pickle.dump(list_of_dfs, f)
 
+# list_of_dfs tur?udan ç?karma i?lemi
+with open('list_of_dfs.pkld', 'rb') as f:
+    list_of_dfs = pickle.load(f)
 
-# Örne?in, 2023 y?l? Ocak ay? verilerini almak için
-monthly_vals = get_monthly_vals(dict_list, 2021, 12)
-monthly_vals.shape
-#### Normalizasyon yani scaling yapmam?z gerek
-####################################################
+################################ Normalizasyon
+scaler = MinMaxScaler(feature_range=(0, 1))
+normalized_dfs = [pd.DataFrame(scaler.fit_transform(df), columns=df.columns) for df in list_of_dfs]
 
 
 #### LSTM - omg it's happening
 # 1. Veri Haz?rl???
-# 'dataframes' bir liste olarak tüm DataFrame'lerinizi içerir
-dataframes = [df1, df2, ..., df487]
 
 # DataFrame'leri numpy array'lerine dönü?türüp birle?tirin
-data = np.array([df.values for df in dataframes])  # (720, 487, 57)
+data = np.array([df.values for df in list_of_dfs])  # (720, 487, 57)
 
 # 2. Pencereleme
 def create_windows(data, window_size, forecast_horizon):
@@ -698,7 +793,14 @@ def create_windows(data, window_size, forecast_horizon):
         X.append(data[start:end, :, :])
         y.append(data[end:end + forecast_horizon, :, :])
 
-    return np.array(X), np.array(y)
+    X = np.array(X)
+    y = np.array(y)
+
+    # X'in boyutlar?n? (batch_size, time_steps, features) haline getir
+    X = X.reshape(X.shape[0], X.shape[1], -1)
+    y = y.reshape(y.shape[0], y.shape[1], -1)
+
+    return X, y
 
 
 window_size = 12 # window size'? hala tam olarak anlayamad?m
@@ -708,14 +810,13 @@ X, y = create_windows(data, window_size, forecast_horizon)  # X: (672, 12, 487, 
 # 3. E?itim ve Test Setlerine Bölme
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
 
-# 4. LSTM Modelini Olu?turma ve E?itme
+# 4. LSTM Modelini Olu?turma ve E?itim
 model = Sequential()
-model.add(LSTM(units=50, return_sequences=True, input_shape=(window_size, data.shape[1], data.shape[2])))
-model.add(LSTM(units=50, return_sequences=True))
+model.add(LSTM(units=57, return_sequences=True, input_shape=(window_size, data.shape[1] * data.shape[2])))
+model.add(LSTM(units=57, return_sequences=True))
 model.add(Dense(data.shape[2]))  # Ç?k?? katman?, tahmin edilmesi gereken sütun say?s?na göre ayarlanmal?
 model.compile(optimizer='adam', loss='mse')
 
 # Modeli e?itme
 history = model.fit(X_train, y_train, epochs=50, batch_size=32, validation_data=(X_test, y_test))
-
 
