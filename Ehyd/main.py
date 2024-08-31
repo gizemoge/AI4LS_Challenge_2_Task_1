@@ -577,6 +577,9 @@ for i in range(len(dict_list)):
     dict_list[i] = convert_series_to_dataframe(dict_list[i])
 
 
+# todo sarima yap?ls?n
+
+
 # Lag ve rolling mean hesaplamalar?n? gerçekle?tirecek fonksiyon
 def add_lag_and_rolling_mean(df, window=6):
     # ?lk sütunun ad?n? al
@@ -592,6 +595,12 @@ def add_lag_and_rolling_mean(df, window=6):
 for d in dict_list:
     for key, df in d.items():
         d[key] = add_lag_and_rolling_mean(df)
+
+for key, value in filled_groundwater_dict.items():
+    print(value[value == 0].count())
+
+nani = filled_groundwater_dict["324095"]
+nani[nani == 0].count()
 
 
 def zero_padding(df, start_date='1960-01-01'):
@@ -633,10 +642,10 @@ for dictionary in dict_list:
         dictionary[key] = convert_to_float32(dictionary[key])
 
 
-################ 720 dataframe
+################ 733 dataframe
 list_of_dfs = []
 
-# 720 ay için döngü
+# 733 ay için döngü
 for month in range(720):
 
     index_values = data['hzbnr01']
@@ -769,7 +778,7 @@ with open('list_of_dfs.pkl', 'wb') as f:
     pickle.dump(list_of_dfs, f)
 
 # list_of_dfs tur?udan ç?karma i?lemi
-with open('list_of_dfs.pkld', 'rb') as f:
+with open('list_of_dfs.pkl', 'rb') as f:
     list_of_dfs = pickle.load(f)
 
 ################################ Normalizasyon
