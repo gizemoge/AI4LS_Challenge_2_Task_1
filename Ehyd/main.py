@@ -567,15 +567,7 @@ dict_list = [filled_conductivity_dict, filled_data_gw_temp_dict, filled_groundwa
 
 
 # Dict list içindeki her bir sözlü?ün value'lar?n? DataFrame yapacak fonksiyon
-
 def convert_series_to_dataframe(d):
-    """
-    Dict_list al?yor, geziyor, yani 11 dataframe'de geziyor. O sözlüklerdeki serileri a?a??da df'e çeviriyor.
-    Key dedi?i index asl?nda.
-    Args:
-        d: dict_list
-    Returns:
-    """
     for key in d:
         d[key] = d[key].to_frame(name=key)
     return d
@@ -583,53 +575,16 @@ def convert_series_to_dataframe(d):
 for i in range(len(dict_list)):
     dict_list[i] = convert_series_to_dataframe(dict_list[i])
 
-data.head()
-
-points  gw_level    4_1_original    4_1_lag1    4_1_lag2   4_2_original    4_2_lag1
-...      4.3
-300485   10.5
-300486    13.2
-300487
-
-final_df[haznbr] = data[haznbr]
-487 x 1
-
-concat gw_level  left
-concat rain
-
-
-
-def convert_series_to_dataframe(d, dict_name):
-    for key in d:
-        d[key] = d[key].to_frame(name=f"{dict_name}_{key}")
-    return d
-
-for i in range(len(dict_list)):
-    dict_name = f"{i}"  # dict_list içindeki her sözlük için bir isim olusturabilirsiniz, ya da uygun isimler zaten varsa onlar? kullanabilirsiniz.
-    dict_list[i] = convert_series_to_dataframe(dict_list[i], dict_name)
-
-# Güncellenmi? sözlükleri kontrol et
-for key, df in filled_rain_dict.items():
-    print(f"{key}:")
-    print(df.tail(15))  # Ba?lang?çta birkaç sat?r? gösterir
-    print()
-
-#####
-
-
-###############33
 
 # Lag ve rolling mean hesaplamalar?n? gerçekle?tirecek fonksiyon
 def add_lag_and_rolling_mean(df, window=6):
     # ?lk sütunun ad?n? al
-    column_name = df.columns[0] "Original_value"
-
+    column_name = df.columns[0]
     # 1 lag'li versiyonu ekle
-    df[f'{column_name}_lag_1'] = df[column_name].shift(1)
-
+    df[f'lag_1'] = df[column_name].shift(1)
     # Lag'li ve rolling mean sütunlar?n? ekle
     for i in range(1, 2):  # Burada 1 lag'li oldu?u için range(1, 2) kullan?yoruz.
-        df[f'{column_name}_rolling_mean_{window}_lag_{i}'] = df[column_name].shift(i).rolling(window=window).mean()
+        df[f'rolling_mean_{window}_lag_{i}'] = df[column_name].shift(i).rolling(window=window).mean()
     return df
 
 
@@ -665,11 +620,11 @@ for dictionary in dict_list:
     for key in dictionary:
         dictionary[key] = zero_padding(dictionary[key])
 
-# Güncellenmi? sözlükleri kontrol et
-for key, df in filled_snow_dict_monthly.items():
-    print(f"{key}:")
-    print(df.tail(15))  # Ba?lang?çta birkaç sat?r? gösterir
-    print()
+# # Güncellenmi? sözlükleri kontrol et
+# for key, df in filled_snow_dict_monthly.items():
+#     print(f"{key}:")
+#     print(df.tail(15))  # Ba?lang?çta birkaç sat?r? gösterir
+#     print()
 
 
 ###############
@@ -684,21 +639,22 @@ for dictionary in dict_list:
         dictionary[key] = convert_to_float32(dictionary[key])
 
 
-# float 32 check etmek için
-def check_dtypes(df):
-    return df.dtypes
-# Güncellenmi? veri çerçevelerinin veri tiplerini kontrol etme
-for dictionary in dict_list:
-    for key, df in dictionary.items():
-        print(f"{key}:")
-        print("Data Types:")
-        print(check_dtypes(df))  # Veri tiplerini kontrol eder
-        print()
+# # float 32 check etmek için
+# def check_dtypes(df):
+#     return df.dtypes
+# # Güncellenmi? veri çerçevelerinin veri tiplerini kontrol etme
+# for dictionary in dict_list:
+#     for key, df in dictionary.items():
+#         print(f"{key}:")
+#         print("Data Types:")
+#         print(check_dtypes(df))  # Veri tiplerini kontrol eder
+#         print()
 
 
 #### dataframe'leri indexlerine göre birle?tirece?im için hepsinde t?pat?p ayn? indeks mi var ona bakaca??m
 # kafamdaki plan:
 #### 487 dataframe yapal?m ve bir listeye alal?m ya da tam tersi 720 tanesini al?p bir listeye koyal?m ( bu daha mant?kl? çünkü sonra transpose'unu almak zorunda kalmay?z)
+
 
 ###################################################
 # Birden fazla sözlükten belirli bir ay?n 'val' sütunlar?n? toplamak için bir fonksiyon
@@ -721,19 +677,16 @@ def get_monthly_vals(dict_list, year, month):
 monthly_vals = get_monthly_vals(dict_list, 2021, 12)
 monthly_vals.shape
 #### Normalizasyon yani scaling yapmam?z gerek
+####################################################
 
 
 #### LSTM - omg it's happening
 # 1. Veri Haz?rl???
-# Örnek veri yükleme
 # 'dataframes' bir liste olarak tüm DataFrame'lerinizi içerir
-dataframes = [df1, df2, ..., df487]  # Burada df1, df2, ..., df487 yerlerine gerçek DataFrame'lerinizi koymal?s?n?z
+dataframes = [df1, df2, ..., df487]
 
 # DataFrame'leri numpy array'lerine dönü?türüp birle?tirin
-data = np.array([df.values for df in dataframes])  # (487, 720, 5)
-
-# Veriyi (720, 487, 5) format?na dönü?türün
-data = data.transpose(1, 0, 2)  # (720, 487, 5)  # modelin zaman serisi oldu?unu anlamas? için bu gerek
+data = np.array([df.values for df in dataframes])  # (720, 487, 5)
 
 # 2. Pencereleme
 def create_windows(data, window_size, forecast_horizon):

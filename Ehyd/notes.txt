@@ -1,22 +1,22 @@
 
 ########################################################################################################################
-# Yer alt? su seviyesi – 3792
-# Yer alt? s?cakl?k – 1562
+# Yer alt? su seviyesi – 3792 *
+# Yer alt? s?cakl?k – 1562 *
 # Messstellen – 3792
 #
-# Ya?mur – 863
-# Kar – 631
+# Ya?mur – 863 *
+# Kar – 631 *
 # Messstellen – 907
 #
-# Fahig iletkenlik – 90
-# Schüt debi – 93
-# Temp – 93
+# Fahig iletkenlik – 90 *
+# Schüt debi – 93 *
+# Temp – 93 *
 # messstellen – 93
 #
-# w-tages nehir seviyesi – 759 (iki csv'de data yok ama o yüzden 757 gelmeli)
-# wt-monat temp – 322
-# schweb sediment – 35
-# q tages debi - 625
+# w-tages nehir seviyesi – 759 (iki csv'de data yok ama o yüzden 757 gelmeli) *
+# wt-monat temp – 322 *
+# schweb sediment – 35 *
+# q tages debi - 625 *
 # messstellen - 792
 ########################################################################################################################
 
