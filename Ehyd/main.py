@@ -160,8 +160,6 @@ def date_to_index(df_dict):
         df_value.set_index('Date', inplace=True)
     return df_dict
 
-
-
 def filter_dataframes_by_points(dataframes_dict, points_list):
     """
     Filters a dictionary of DataFrames to include only those whose names are specified in a given CSV file.
@@ -334,8 +332,6 @@ data.drop(["x", "y"], axis=1, inplace=True)
 data.to_csv('data.csv', index=False)
 
 
-
-
 # yer alt? suyu s?cakl?k tur?usu için
 data['nearest_gw_temp'].explode().nunique()  # 276
 
@@ -352,8 +348,6 @@ for key_list in data['nearest_gw_temp']:
             data_gw_temp_dict[str_key] = groundwater_temperature_dict[str_key]
 
 len(data_gw_temp_dict)  # 276
-
-
 
 
 ########################################################################################################################
@@ -595,24 +589,110 @@ mapping_dict = {
 # Son indeks 2021 Aral?k olmayan DataFrame'lerin say?s?n? saklayacak bir sözlük olu?turun
 non_dec_2021_counts = {key: 0 for key in mapping_dict.keys()}
 
+##########
+# Mevcut olan kodlar? saklamak için sözlükleri ba?lat
+existing_codes_dict = {}
+
 # Tüm sözlükleri döngüye al
 for key, df_dict in mapping_dict.items():
+    # Listeyi ba?lat
+    key_list = []
+
     for code, df in df_dict.items():
         if not df.empty:
             # ?ndeksi datetime format?na dönü?tür
             df.index = pd.to_datetime(df.index, errors='coerce')
             last_index = df.index[-1]
+
             if last_index is not pd.NaT and not (last_index.year == 2021 and last_index.month == 12):
                 non_dec_2021_counts[key] += 1
                 print(f"{key} - Code: {code}, Last Index: {last_index}, 2021 Aral?k de?il")
+                key_list.append(str(code))  # code'u string olarak ekle
         else:
             print(f"{key} - Code: {code} DataFrame is empty")
 
-# Her key için 2021 Aral?k olmayan DataFrame'lerin say?s?n? yazd?r?n
-for key, count in non_dec_2021_counts.items():
-    print(f"{key} - 2021 Aral?k Olmayan DataFrames: {count}")
+    # Benzersiz kodlar? elde et
+    key_list = list(set(key_list))
+
+    if key_list:
+        globals()[f"{key}_list"] = key_list
+
+# Mevcut olan kodlar? 'data' DataFrame'inde kontrol edip sözlüklerde sakla
+for key in mapping_dict.keys():
+    list_name = f"{key}_list"
+    if list_name in globals():
+        current_list = globals()[list_name]
+        print(f"\n{list_name}: {current_list}")
+        print(f"{list_name} uzunlu?u: {len(current_list)}")
+
+        # 'data' DataFrame'indeki ilgili sütunu kontrol et
+        if key in data.columns:
+            existing_codes_dict[key] = []
+            for code in current_list:
+                if data[key].str.contains(code).any():
+                    print(f"{code} {key} sütununda mevcut.")
+                    existing_codes_dict[key].append(code)  # Mevcut olan kodu sözlü?e ekle
+                else:
+                    print(f"{code} {key} sütununda bulunamad?.")
+            # Mevcut olan kod listesinin uzunlu?unu yazd?r
+            print(f"Mevcut olan kodlar?n uzunlu?u {key}: {len(existing_codes_dict[key])}")
+        else:
+            print(f"{key} isimli sütun 'data' DataFrame'inde mevcut de?il.")
+    else:
+        print(f"{list_name} listesi bo? veya olu?turulmad?.")
+
+# Sonuçlar? yazd?r
+print("\nMevcut olan kodlar:")
+for key, codes in existing_codes_dict.items():
+    print(f"{key}: {codes}")
+    print(f"{key} için mevcut kod say?s?: {len(codes)}")
+#########
+# burada existing_codes_dict sözlü?ündeki dataframeleri Sarima ile 2021e kadar olmayanlar? doldurmay? deneyelim:
+
+def sarima_forecast_for_nan(mapping_dict, existing_codes_dict):
+    """
+    Bu fonksiyon, mapping_dict içindeki her DataFrame için,
+    existing_codes_dict'teki ID'lerle e?le?en DataFrame'lerin ba?l?klar?n? yazd?r?r
+    ve her key için kaç adet head yazd?r?ld???n? bildirir.
+
+    :param mapping_dict: Anahtarlar?n DataFrame'lere e?lendi?i sözlük
+    :param existing_codes_dict: Her anahtar için ID listelerinin bulundu?u sözlük
+    """
+    total_counts = []  # Her bir key için yazd?r?lan head say?s?n? tutacak liste
+
+    for key, data_dict in mapping_dict.items():
+        count = 0  # Her key için yazd?r?lan head say?s?n? takip etmek için sayaç
+
+        # E?er data_dict bir sözlükse (DataFrame'lerin bulundu?u sözlük)
+        if isinstance(data_dict, dict):
+            ids_list = existing_codes_dict.get(key, [])
+            for data_id in ids_list:
+                # ID'nin anahtar olarak bulundu?u DataFrame'i al
+                if data_id in data_dict:
+                    df = data_dict[data_id]
+                    # DataFrame'in head'ini yazd?r
+                    print(f"Head of DataFrame for ID {data_id} in '{key}':")
+                    print(df.head())
+                    print("\n")  # Her bir DataFrame aras?na bo?luk ekler
+                    count += 1  # Her yazd?r?lan head için sayac? art?r
+                else:
+                    print(f"ID {data_id} not found in the dictionary for key '{key}'.")
+        else:
+            print(f"Value for key '{key}' is not a dictionary or DataFrame.")
+
+        # Her bir key için kaç adet head yazd?r?ld???n? listeye ekle
+        total_counts.append(f"{key}: {count}")
+
+    # Sonuçlar? tek sat?rda yazd?r
+    print("Total heads printed per key: " + ", ".join(total_counts))
 
 
+# Fonksiyonu kullanmak için:
+sarima_forecast_for_nan(mapping_dict, existing_codes_dict)
+
+
+
+###################333
 # Lag ve rolling mean hesaplamalar?n? gerçekle?tirecek fonksiyon
 def add_lag_and_rolling_mean(df, window=6):
     # ?lk sütunun ad?n? al
