@@ -613,8 +613,6 @@ for key, count in non_dec_2021_counts.items():
     print(f"{key} - 2021 Aral?k Olmayan DataFrames: {count}")
 
 
-
-
 # Lag ve rolling mean hesaplamalar?n? gerçekle?tirecek fonksiyon
 def add_lag_and_rolling_mean(df, window=6):
     # ?lk sütunun ad?n? al
