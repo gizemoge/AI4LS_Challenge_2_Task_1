@@ -576,8 +576,43 @@ def convert_series_to_dataframe(d):
 for i in range(len(dict_list)):
     dict_list[i] = convert_series_to_dataframe(dict_list[i])
 
+# TODO SARIMA gerek
+# hangi sözlükte kaç? 2021 aral?kta bitmiyor:
+mapping_dict = {
+    'hzbnr01': filled_groundwater_dict,
+    'nearest_gw_temp': filled_data_gw_temp_dict,
+    'nearest_rain': filled_rain_dict,
+    'nearest_snow': filled_snow_dict_monthly,
+    'nearest_source_fr': filled_source_flow_rate_dict,
+    'nearest_conductivity': filled_conductivity_dict,
+    'nearest_source_temp': filled_source_temp_dict,
+    'nearest_owf_level': filled_surface_water_level_dict_monthly,
+    'nearest_owf_temp': filled_surface_water_temp_dict,
+    'nearest_sediment': filled_sediment_dict_monthly,
+    'nearest_owf_fr': filled_surface_water_flow_rate_dict_monthly,
+}
 
-# todo sarima yap?ls?n
+# Son indeks 2021 Aral?k olmayan DataFrame'lerin say?s?n? saklayacak bir sözlük olu?turun
+non_dec_2021_counts = {key: 0 for key in mapping_dict.keys()}
+
+# Tüm sözlükleri döngüye al
+for key, df_dict in mapping_dict.items():
+    for code, df in df_dict.items():
+        if not df.empty:
+            # ?ndeksi datetime format?na dönü?tür
+            df.index = pd.to_datetime(df.index, errors='coerce')
+            last_index = df.index[-1]
+            if last_index is not pd.NaT and not (last_index.year == 2021 and last_index.month == 12):
+                non_dec_2021_counts[key] += 1
+                print(f"{key} - Code: {code}, Last Index: {last_index}, 2021 Aral?k de?il")
+        else:
+            print(f"{key} - Code: {code} DataFrame is empty")
+
+# Her key için 2021 Aral?k olmayan DataFrame'lerin say?s?n? yazd?r?n
+for key, count in non_dec_2021_counts.items():
+    print(f"{key} - 2021 Aral?k Olmayan DataFrames: {count}")
+
+
 
 
 # Lag ve rolling mean hesaplamalar?n? gerçekle?tirecek fonksiyon
