@@ -27,8 +27,6 @@ from sklearn.model_selection import train_test_split
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense
 
-
-
 # FUNCTIONS
 def station_coordinates(input):
     """
@@ -169,6 +167,24 @@ def process_dataframes(df_dict):
 
     return df_dict
 
+def process_and_store_data(folder, coordinates, prefix, points_list=None):
+    data_dict, data_coordinates = to_dataframe(folder, coordinates)
+    data_dict = process_dataframes(data_dict)
+
+    for df_name, df in data_dict.items():
+        df.astype('float32')
+
+    to_global(data_dict, prefix=prefix)
+
+    if points_list:
+        data_dict = filter_dataframes_by_points(data_dict, points_list)
+
+    return data_dict, data_coordinates
+
+def save_to_pickle(data_dict, filename):
+    with open(filename, 'wb') as f:
+        pickle.dump(data_dict, f)
+
 def filter_dataframes_by_points(dataframes_dict, points_list):
     """
     Filters a dictionary of DataFrames to include only those whose names are specified in a given CSV file.
@@ -187,159 +203,11 @@ def filter_dataframes_by_points(dataframes_dict, points_list):
 # Creating Dataframes from given CSVs
 #####################################
 
-"""
-Buraday? k?salt?yorum hemen a?a??da 
-##################################### Groundwater
-groundwater_all_coordinates = station_coordinates("Groundwater")
-
-# Groundwater Level
-groundwater_folder_path = os.path.join("Ehyd", "datasets_ehyd", "Groundwater", "Grundwasserstand-Monatsmittel")
-groundwater_dict, groundwater_coordinates = to_dataframe(groundwater_folder_path, groundwater_all_coordinates)
-groundwater_dict = process_dataframes(groundwater_dict)
-to_global(groundwater_dict, prefix="gw_")
-
-# Groundwater Temperature
-groundwater_temperature_folder_path = os.path.join("Ehyd", "datasets_ehyd", "Groundwater", "Grundwassertemperatur-Monatsmittel")
-groundwater_temperature_dict, groundwater_temperature_coordinates = to_dataframe(groundwater_temperature_folder_path, groundwater_all_coordinates)
-groundwater_temperature_dict = process_dataframes(groundwater_temperature_dict)
-to_global(groundwater_temperature_dict, prefix="gwt_")
-
-# Creating new dictionaries according to requested stations
-points = pd.read_csv(os.path.join("Ehyd", "datasets_ehyd", "gw_test_empty.csv"))
-points_list = [col for col in points.columns[1:]]
-
-filtered_groundwater_dict = filter_dataframes_by_points(groundwater_dict, points_list)
-filtered_gw_coordinates = groundwater_coordinates[groundwater_coordinates['hzbnr01'].isin([int(i) for i in points_list])]
-
-##################################### Precipitation
-precipitation_coordinates = station_coordinates("Precipitation")
-
-# Rain
-rain_folder_path = os.path.join("Ehyd", "datasets_ehyd", "Precipitation", "N-Tagessummen")
-rain_dict, rain_coordinates = to_dataframe(rain_folder_path, precipitation_coordinates)
-rain_dict_monthly = process_dataframes(rain_dict)
-to_global(rain_dict_monthly, prefix="rain_")
-
-# Snow
-snow_folder_path = os.path.join("Ehyd", "datasets_ehyd", "Precipitation", "NS-Tagessummen")
-snow_dict, snow_coordinates = to_dataframe(snow_folder_path, precipitation_coordinates)
-snow_dict = process_dataframes(snow_dict)
-to_global(snow_dict, prefix="snow_")
-
-##################################### Sources
-sources_coordinates = station_coordinates("Sources")
-
-# Flow Rate
-source_flow_rate_path = os.path.join("Ehyd", "datasets_ehyd", "Sources", "Quellschüttung-Tagesmittel")
-source_flow_rate_dict, source_flow_rate_coordinates = to_dataframe(source_flow_rate_path, sources_coordinates)
-source_flow_rate_dict_monthly = process_dataframes(source_flow_rate_dict)
-to_global(source_flow_rate_dict_monthly, prefix="source_fr_")
-
-# Conductivity
-conductivity_folder_path = os.path.join("Ehyd", "datasets_ehyd", "Sources", "Quellleitfähigkeit-Tagesmittel")
-conductivity_dict, conductivity_coordinates = to_dataframe(conductivity_folder_path, sources_coordinates)
-conductivity_dict_monthly = process_dataframes(conductivity_dict)
-to_global(conductivity_dict_monthly, prefix="conductivity_")
-
-# Source Temperature
-source_temp_folder_path = os.path.join("Ehyd", "datasets_ehyd", "Sources", "Quellwassertemperatur-Tagesmittel")
-source_temp_dict, source_temp_coordinates = to_dataframe(source_temp_folder_path, sources_coordinates)
-source_temp_dict_monthly = process_dataframes(source_temp_dict)
-to_global(source_temp_dict_monthly, prefix="source_temp_")
-
-##################################### Surface Water
-
-surface_water_coordinates = station_coordinates("Surface_Water")
-
-# Surface Water Level
-surface_water_level_folder_path = os.path.join("Ehyd", "datasets_ehyd", "Surface_Water", "W-Tagesmittel")
-surface_water_level_dict, surface_water_level_coordinates = to_dataframe(surface_water_level_folder_path, surface_water_coordinates)
-surface_water_level_dict_monthly = process_dataframes(surface_water_level_dict)
-to_global(surface_water_level_dict_monthly, prefix="surface_water_level")
-
-# Surface Water Temperature
-surface_water_temp_folder_path = os.path.join("Ehyd", "datasets_ehyd", "Surface_Water", "WT-Monatsmittel")
-surface_water_temp_dict, surface_water_temp_coordinates = to_dataframe(surface_water_temp_folder_path, surface_water_coordinates)
-surface_water_temp_dict = process_dataframes(surface_water_temp_dict)
-to_global(surface_water_temp_dict, prefix="surface_water_temp")
-
-# Sediment
-sediment_folder_path = os.path.join("Ehyd", "datasets_ehyd", "Surface_Water", "Schwebstoff-Tagesfracht")
-sediment_dict, sediment_coordinates = to_dataframe(sediment_folder_path, surface_water_coordinates)  # daily version
-sediment_dict = process_dataframes(sediment_dict)
-to_global(sediment_dict, prefix="sediment_")
-
-# Surface Water Flow Rate
-surface_water_flow_rate_folder_path = os.path.join("Ehyd", "datasets_ehyd", "Surface_Water", "Q-Tagesmittel")
-surface_water_flow_rate_dict, surface_water_flow_rate_coordinates = to_dataframe(surface_water_flow_rate_folder_path, surface_water_coordinates)
-surface_water_flow_rate_dict_monthly = process_dataframes(surface_water_flow_rate_dict)
-to_global(surface_water_flow_rate_dict_monthly, prefix="surface_water_fr_")
-
-
-# geçici pkl
-# write pickle
-with open('sediment_dict.pkl', 'wb') as f:
-    pickle.dump(sediment_dict, f)
-
-with open('surface_water_level_dict_monthly.pkl', 'wb') as f:
-    pickle.dump(surface_water_level_dict_monthly, f)
-
-with open('surface_water_flow_rate_dict_monthly.pkl', 'wb') as f:
-    pickle.dump(surface_water_flow_rate_dict_monthly, f)
-
-with open('surface_water_temp_dict.pkl', 'wb') as f:
-    pickle.dump(surface_water_temp_dict, f)
-
-with open('filtered_groundwater_dict.pkl', 'wb') as f:
-    pickle.dump(filtered_groundwater_dict, f)
-
-with open('snow_dict.pkl', 'wb') as f:
-    pickle.dump(snow_dict, f)
-
-with open('conductivity_dict.pkl', 'wb') as f:
-    pickle.dump(conductivity_dict_monthly, f)
-
-with open('source_flow_rate_dict.pkl', 'wb') as f:
-    pickle.dump(source_flow_rate_dict, f)
-
-with open('source_temp_dict.pkl', 'wb') as f:
-    pickle.dump(source_temp_dict, f)
-
-with open('rain_dict.pkl', 'wb') as f:
-    pickle.dump(rain_dict, f)
-    
-"""
-def process_and_store_data(folder, coordinates, prefix, points_list=None):
-    data_dict, data_coordinates = to_dataframe(folder, coordinates)
-    data_dict = process_dataframes(data_dict)
-    to_global(data_dict, prefix=prefix)
-
-    if points_list:
-        data_dict = filter_dataframes_by_points(data_dict, points_list)
-
-    return data_dict, data_coordinates
-
-def save_to_pickle(data_dict, filename):
-    with open(filename, 'wb') as f:
-        pickle.dump(data_dict, f)
-
 # Define paths and coordinates
 groundwater_all_coordinates = station_coordinates("Groundwater")
 precipitation_coordinates = station_coordinates("Precipitation")
 sources_coordinates = station_coordinates("Sources")
 surface_water_coordinates = station_coordinates("Surface_Water")
-
-# Groundwater Temperature Dictionary
-gw_folders = [("Groundwater/Grundwassertemperatur-Monatsmittel", "gwt_")]
-for folder, prefix in gw_folders:
-    gw_temp_dict, gw_temp_coordinates = process_and_store_data(os.path.join("Ehyd", "datasets_ehyd", folder), groundwater_all_coordinates, prefix)
-
-# Filtered Groundwater Dictionary
-points = pd.read_csv(os.path.join("Ehyd", "datasets_ehyd", "gw_test_empty.csv"))
-points_list = [col for col in points.columns[1:]]
-filtered_groundwater_dict, filtered_gw_coordinates = process_and_store_data(
-    os.path.join("Ehyd", "datasets_ehyd", "Groundwater/Grundwasserstand-Monatsmittel"),
-    groundwater_all_coordinates, "gw_", points_list)
 
 # Precipitation: Rain and Snow
 precipitation_folders = [
@@ -368,26 +236,33 @@ create_dict(source_folders, )
 
 # Sources: Flow Rate, Conductivity, Temperature
 source_folders = [
-    ("Sources/Quellschüttung-Tagesmittel", "source_fr_"),
-    ("Sources/Quellleitfähigkeit-Tagesmittel", "conductivity_"),
-    ("Sources/Quellwassertemperatur-Tagesmittel", "source_temp_")]
-for folder, prefix in source_folders:
-    process_and_store_data(os.path.join("Ehyd", "datasets_ehyd", folder), sources_coordinates, prefix)
+    ("Quellschüttung-Tagesmittel", "source_fr_"),
+    ("Quellleitfähigkeit-Tagesmittel", "conductivity_"),
+    ("Quellwassertemperatur-Tagesmittel", "source_temp_")]
 
-# gizmo
-for folder, prefix in source_folders:
-    dict_name, dict_coord = process_and_store_data(os.path.join("Ehyd", "datasets_ehyd", folder), sources_coordinates, prefix)
-    globals()[f"{prefix}_dict"] = dict_name
-    globals()[f"{prefix}_coordinates"] = dict_coord
-
-# Surface Water: Level, Temperature, Sediment, Flow Rate
 surface_water_folders = [
-    ("Surface_Water/W-Tagesmittel", "surface_water_level_"),
-    ("Surface_Water/WT-Monatsmittel", "surface_water_temp_"),
-    ("Surface_Water/Schwebstoff-Tagesfracht", "sediment_"),
-    ("Surface_Water/Q-Tagesmittel", "surface_water_fr_")]
-for folder, prefix in surface_water_folders:
-    process_and_store_data(os.path.join("Ehyd", "datasets_ehyd", folder), surface_water_coordinates, prefix)
+    ("W-Tagesmittel", "surface_water_level_"),
+    ("WT-Monatsmittel", "surface_water_temp_"),
+    ("Schwebstoff-Tagesfracht", "sediment_"),
+    ("Q-Tagesmittel", "surface_water_fr_")]
+
+# Groundwater Dictionary (Filtered to requested 487 points)
+points = pd.read_csv(os.path.join("Ehyd", "datasets_ehyd", "gw_test_empty.csv"))
+points_list = [col for col in points.columns[1:]]
+filtered_groundwater_dict, filtered_gw_coordinates = process_and_store_data(
+    os.path.join("Ehyd", "datasets_ehyd", "Groundwater", "Grundwasserstand-Monatsmittel"),
+    groundwater_all_coordinates, "gw_", points_list)
+
+gw_temp_dict, gw_temp_coordinates = process_and_store_data(os.path.join("Ehyd", "datasets_ehyd", "Groundwater", "Grundwassertemperatur-Monatsmittel"), groundwater_all_coordinates, "gwt_")
+rain_dict, rain_coord = process_and_store_data(os.path.join("Ehyd", "datasets_ehyd", "Precipitation", precipitation_folders[0][0]), precipitation_coordinates, "rain_")
+snow_dict, snow_coord = process_and_store_data(os.path.join("Ehyd", "datasets_ehyd", "Precipitation", precipitation_folders[1][0]), precipitation_coordinates, "snow_")
+source_fr_dict, source_fr_coord = process_and_store_data(os.path.join("Ehyd", "datasets_ehyd", "Sources", source_folders[0][0]), sources_coordinates, "source_fr_")
+conduct_dict, conduct_coord = process_and_store_data(os.path.join("Ehyd", "datasets_ehyd", "Sources", precipitation_folders[1][0]), sources_coordinates, "conduct_")
+source_temp_dict, source_temp_coord = process_and_store_data(os.path.join("Ehyd", "datasets_ehyd", "Sources", source_folders[2][0]), sources_coordinates, "source_temp_")
+surface_water_lvl_dict, surface_water_lvl_coord = process_and_store_data(os.path.join("Ehyd", "datasets_ehyd", "Surface_Water", surface_water_folders[0][0]), surface_water_coordinates, "surface_water_lvl_")
+surface_water_temp_dict, surface_water_temp_coord = process_and_store_data(os.path.join("Ehyd", "datasets_ehyd", "Surface_Water", surface_water_folders[1][0]), surface_water_coordinates, "surface_water_temp_")
+sediment_dict, sediment_coord = process_and_store_data(os.path.join("Ehyd", "datasets_ehyd", "Surface_Water", surface_water_folders[2][0]), surface_water_coordinates, "sediment_")
+surface_water_fr_dict, surface_water_fr_coord = process_and_store_data(os.path.join("Ehyd", "datasets_ehyd", "Surface_Water", surface_water_folders[3][0]), surface_water_coordinates, "surface_water_fr_")
 
 # gizmo
 for folder, prefix in surface_water_folders:
@@ -415,7 +290,6 @@ for filename, data_dict in pickle_files.items():
 ########################################################################################################################
 # Gathering associated features for 487 stations
 ########################################################################################################################
-
 def calculate_distance(coord1, coord2):
     return distance.euclidean(coord1, coord2)
 
