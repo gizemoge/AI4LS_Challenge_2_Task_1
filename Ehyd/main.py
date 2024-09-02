@@ -194,6 +194,8 @@ def filter_dataframes_by_points(dataframes_dict, points_list):
 # Creating Dataframes from given CSVs
 #####################################
 
+"""
+Buraday? k?salt?yorum hemen a?a??da """
 ##################################### Groundwater
 groundwater_all_coordinates = station_coordinates("Groundwater")
 
@@ -302,7 +304,7 @@ with open('snow_dict.pkl', 'wb') as f:
     pickle.dump(snow_dict, f)
 
 with open('conductivity_dict.pkl', 'wb') as f:
-    pickle.dump(conductivity_dict, f)
+    pickle.dump(conductivity_dict_monthly, f)
 
 with open('source_flow_rate_dict.pkl', 'wb') as f:
     pickle.dump(source_flow_rate_dict, f)
@@ -311,8 +313,80 @@ with open('source_temp_dict.pkl', 'wb') as f:
     pickle.dump(source_temp_dict, f)
 
 with open('rain_dict.pkl', 'wb') as f:
-    pickle.dump(rain_dict, f)
+    pickle.dump(rain_dict, fc
+def process_and_store_data(folder, coordinates, prefix, points_list=None):
+    data_dict, data_coordinates = to_dataframe(folder, coordinates)
+    data_dict = process_dataframes(data_dict)
+    to_global(data_dict, prefix=prefix)
 
+    if points_list:
+        data_dict = filter_dataframes_by_points(data_dict, points_list)
+
+    return data_dict, data_coordinates
+
+def save_to_pickle(data_dict, filename):
+    with open(filename, 'wb') as f:
+        pickle.dump(data_dict, f)
+
+# Define paths and coordinates
+groundwater_all_coordinates = station_coordinates("Groundwater")
+precipitation_coordinates = station_coordinates("Precipitation")
+sources_coordinates = station_coordinates("Sources")
+surface_water_coordinates = station_coordinates("Surface_Water")
+
+# Groundwater Level and Temperature
+gw_folders = [
+    ("Groundwater/Grundwasserstand-Monatsmittel", "gw_"),
+    ("Groundwater/Grundwassertemperatur-Monatsmittel", "gwt_")]
+for folder, prefix in gw_folders:
+    process_and_store_data(os.path.join("Ehyd", "datasets_ehyd", folder), groundwater_all_coordinates, prefix)
+
+# Filter groundwater data
+points = pd.read_csv(os.path.join("Ehyd", "datasets_ehyd", "gw_test_empty.csv"))
+points_list = [col for col in points.columns[1:]]
+filtered_groundwater_dict, filtered_gw_coordinates = process_and_store_data(
+    os.path.join("Ehyd", "datasets_ehyd", "Groundwater/Grundwasserstand-Monatsmittel"),
+    groundwater_all_coordinates, "gw_", points_list)
+
+# Precipitation: Rain and Snow
+precipitation_folders = [
+    ("Precipitation/N-Tagessummen", "rain_"),
+    ("Precipitation/NS-Tagessummen", "snow_")]
+for folder, prefix in precipitation_folders:
+    process_and_store_data(os.path.join("Ehyd", "datasets_ehyd", folder), precipitation_coordinates, prefix)
+
+# Sources: Flow Rate, Conductivity, Temperature
+source_folders = [
+    ("Sources/Quellschüttung-Tagesmittel", "source_fr_"),
+    ("Sources/Quellleitfähigkeit-Tagesmittel", "conductivity_"),
+    ("Sources/Quellwassertemperatur-Tagesmittel", "source_temp_")]
+for folder, prefix in source_folders:
+    process_and_store_data(os.path.join("Ehyd", "datasets_ehyd", folder), sources_coordinates, prefix)
+
+# Surface Water: Level, Temperature, Sediment, Flow Rate
+surface_water_folders = [
+    ("Surface_Water/W-Tagesmittel", "surface_water_level"),
+    ("Surface_Water/WT-Monatsmittel", "surface_water_temp"),
+    ("Surface_Water/Schwebstoff-Tagesfracht", "sediment_"),
+    ("Surface_Water/Q-Tagesmittel", "surface_water_fr_")]
+for folder, prefix in surface_water_folders:
+    process_and_store_data(os.path.join("Ehyd", "datasets_ehyd", folder), surface_water_coordinates, prefix)
+
+# Save data to pickle files
+pickle_files = {
+    'sediment_dict.pkl': sediment_dict,
+    'surface_water_level_dict.pkl': surface_water_level_dict, #burada "monthly" vard?, sildim
+    'surface_water_flow_rate_dict.pkl': surface_water_flow_rate_dict, #burada "monthly" vard?, sildim
+    'surface_water_temp_dict.pkl': surface_water_temp_dict,
+    'filtered_groundwater_dict.pkl': filtered_groundwater_dict,
+    'snow_dict.pkl': snow_dict,
+    'conductivity_dict.pkl': conductivity_dict ,#burada sadece sa?da "monthly" vard?, sildim
+    'source_flow_rate_dict.pkl': source_flow_rate_dict,
+    'source_temp_dict.pkl': source_temp_dict,
+    'rain_dict.pkl': rain_dict}
+
+for filename, data_dict in pickle_files.items():
+    save_to_pickle(data_dict, filename)
 
 
 ########################################################################################################################
@@ -403,72 +477,88 @@ with open('data_gw_temp_dict.pkl', 'wb') as f:
     pickle.dump(data_gw_temp_dict, f)
 
 
-# buradayd?k
+# buradayd?k - pickle'dan çekme
+pkl_files = [f for f in os.listdir() if f.endswith('.pkl')]
+
+for pkl_file in pkl_files:
+    with open(pkl_file, 'rb') as file:
+        var_name = pkl_file[:-4]
+        globals()[var_name] = pickle.load(file)
 ########################################################################################################################
-# Investigating the dataframes
+# Sarima güncelliyoruz
 ########################################################################################################################
-def is_monoton(dict):
-    for df_name, value in dict.items():
-        if value.index.name != 'Date':
-            if not value['Date'].is_monotonic_increasing:
-                print(f"{df_name} monoton art?? göstermiyor. Bu konuda bir aksiyon al?nmal?")
-            if 'Date' not in value.columns:
-                print(f"---- {dict}{df_name} index veya sütun olarak 'Date' mevcut de?il.")
-                continue
-            continue
-        if not value.index.is_monotonic_increasing:
-            print(f"{df_name} monoton art?? göstermiyor. Bu konuda bir aksiyon al?nmal?")
-
-is_monoton(filtered_groundwater_dict)
-is_monoton(groundwater_temperature_dict)
-is_monoton(rain_dict)
-is_monoton(snow_dict)
-is_monoton(source_flow_rate_dict)
-is_monoton(conductivity_dict)
-is_monoton(source_temp_dict)
-is_monoton(surface_water_level_dict)
-is_monoton(surface_water_temp_dict)
-is_monoton(sediment_dict)
-is_monoton(surface_water_flow_rate_dict)
-
-
-def plot_row_count_distribution(df_dict):
+def fill_missing_values_with_sarima(df_dict):
     """
-    Bu fonksiyon, verilen sözlükteki DataFrame'lerin sat?r say?lar?n?n da??l?m?n? histogram olarak çizer.
+    Verilen DataFrame'lerdeki eksik de?erleri SARIMA modeli kullanarak doldurur.
 
-    Parametre:
-    df_dict (dict): Anahtarlar?n string, de?erlerin ise pandas DataFrame oldu?u bir sözlük.
+    Eksik de?erlerin baz?lar?n? doldurmadan b?rakmak için, DataFrame'in 0. indeksinden
+    ba?layarak ilk dolu de?ere kadar olan NaN de?erlerini doldurmaz. Sonras?nda kalan NaN de?erlerini
+    'final_values' sütunundan al?r. Ayr?ca, modelin e?itim a?amas?nda eksik de?erler dikkate al?nmaz.
+
+    Args:
+    df_dict (dict): Anahtarlar DataFrame adlar?, de?erleri DataFrame'ler olan bir sözlük.
+
+    Returns:
+    dict: Eksik de?erleri doldurulmu? DataFrame'leri içeren bir sözlük.
     """
-    # DataFrame'lerin sat?r say?lar?n? hesaplay?n
-    row_counts = [df.shape[0] for df in df_dict.values()]
+    filled_dfs = {}
 
-    # Sat?r say?lar?n?n da??l?m?n? histogram olarak çizin
-    plt.hist(row_counts, bins=10, edgecolor='black')
-    plt.xlabel('Sat?r Say?s?')
-    plt.ylabel('Frekans')
-    plt.title('DataFrame Sat?r Say?lar?n?n Da??l?m?')
-    plt.show()
+    for key, df in df_dict.items():
+        # ?lk NaN'dan önceki verileri saklama
+        nan_start_index = df['Values'].first_valid_index()  # ?lk geçerli de?er olan indeks
+        if nan_start_index is not None:
+            df['final_values'] = df['Values'].copy()
+            df.loc[:nan_start_index, 'final_values'] = df.loc[:nan_start_index, 'Values']
+            # NaN de?erleri bu noktada 'NaN' olarak kal?r
+            df['Values'] = df['Values'].loc[nan_start_index:].copy()
+        else:
+            df['final_values'] = df['Values'].copy()
+            df['Values'] = df['Values'].copy()
 
-plot_row_count_distribution(filtered_groundwater_dict)
+        # NaN de?erleri göz ard? ederek SARIMA modelini e?itmek için eksik de?erlerin oldu?u k?s?mlar? bulma
+        valid_values = df['Values'].dropna()
 
+        # SARIMA model parametrelerini belirleme
+        p = d = q = range(0, 2)
+        pdq = list(itertools.product(p, d, q))
+        seasonal_pdq = [(x[0], x[1], x[2], 12) for x in list(itertools.product(p, d, q))]
 
-shapes = []
-dates = []
+        best_aic = np.float32("inf")
+        best_param = None
+        best_seasonal_param = None
 
-for df_name, value in filtered_groundwater_dict.items():
-    shapes.append(value.shape[0])
-    dates.append(value["Date"].min())
+        # Grid Search ile en iyi SARIMA parametrelerini bulma
+        for param in pdq:
+            for seasonal_param in seasonal_pdq:
+                try:
+                    model = SARIMAX(valid_values,
+                                    order=param,
+                                    seasonal_order=seasonal_param,
+                                    enforce_stationarity=False,
+                                    enforce_invertibility=False)
+                    results = model.fit(disp=False)
+                    if results.aic < best_aic:
+                        best_aic = results.aic
+                        best_param = param
+                        best_seasonal_param = seasonal_param
+                except:
+                    continue
 
-print(f"min: {min(shapes)} ay say?s?")
-print(f"max: {max(shapes)} ay say?s?")
-max(dates)  # max, min y?l 2001
+        # En iyi parametrelerle SARIMA modelini olu?turma
+        sarima_model = SARIMAX(df['Values'],
+                               order=best_param,
+                               seasonal_order=best_seasonal_param)
+        sarima_result = sarima_model.fit(disp=False)
 
+        # Eksik de?erleri doldurma
+        df['Values_Filled'] = sarima_result.predict(start=df.index[nan_start_index] if nan_start_index else df.index[0],
+                                                    end=df.index[-1])
+        df['final_values'].update(df['Values_Filled'])
 
-for df_name, df in sediment_dict.items():
-    nan_rows = df[df.isnull().any(axis=1)]
-    print(f"DataFrame: {df_name}")
-    print(f"Toplam NaN say?s?: {df.isnull().sum()}")
-    print(nan_rows)
+        # Sonuçlar? sözlü?e ekleme
+        filled_dfs[key] = df['final_values']
+
+    return filled_dfs
 
 
 ########################################################################################################################
@@ -488,6 +578,9 @@ def fill_missing_values_with_sarima(df_dict):
     filled_dfs = {}
 
     for key, df in df_dict.items():
+        # 'Values' sütununu say?sal veri türüne dönü?türme
+        df['Values'] = pd.to_numeric(df['Values'], errors='coerce')
+
         # SARIMA model parametrelerini belirleme
         p = d = q = range(0, 2)
         pdq = list(itertools.product(p, d, q))
@@ -523,21 +616,132 @@ def fill_missing_values_with_sarima(df_dict):
         # Eksik de?erleri doldurma
         df['Values_Filled'] = sarima_result.predict(start=df.index[0], end=df.index[-1])
         df['final_values'] = df['Values'].combine_first(df['Values_Filled'])
-        df = df["final_values"]
+        # df = df["final_values"]
         filled_dfs[key] = df
 
     return filled_dfs
 
+for key, value in sediment_dict.items():
+    print(value.dtypes)
 
 # Fonksiyonun kullan?m?
-filled_sediment_dict_monthly = fill_missing_values_with_sarima(sediment_dict_monthly)
+filled_sediment_dict = fill_missing_values_with_sarima(sediment_dict)
 filled_surface_water_level_dict_monthly = fill_missing_values_with_sarima(surface_water_level_dict_monthly)
 filled_surface_water_flow_rate_dict_monthly = fill_missing_values_with_sarima(surface_water_flow_rate_dict_monthly)
 filled_surface_water_temp_dict = fill_missing_values_with_sarima(surface_water_temp_dict)
-# bunda bir uyar? verdi uyar?n?n çözümü: df.index = pd.date_range(start='2020-01-01', periods=len(df), freq='MS')
-# biz frekans belirtmedi?imiz için ayl?k oldu?unu tahmin ediyormu?
+
 filled_groundwater_dict = fill_missing_values_with_sarima(filtered_groundwater_dict)
-filled_snow_dict_monthly = fill_missing_values_with_sarima(snow_dict_monthly)
+filled_snow_dict_monthly = fill_missing_values_with_sarima(snow_dict)
+from itertools import islice
+first_five = dict(islice(snow_dict.items(), 5))
+filled_first_five = fill_missing_values_with_sarima(first_five)
+
+dff = filled_first_five["100362"]
+dff.head()
+
+first_five.keys()
+# grafik
+# Çizgi grafi?ini olu?turuyoruz
+plt.figure(figsize=(10, 6))
+plt.plot(dff.index, dff['Values'], label='Values')
+plt.plot(dff.index, dff['Values_Filled'], label='Values_Filled')
+# plt.plot(dff.index, dff['final_values'], label='final_values')
+
+
+# Grafik özelliklerini ayarl?yoruz
+plt.title('Çizgi Grafi?i')
+plt.xlabel('Tarih')
+plt.ylabel('De?erler')
+plt.legend()
+plt.grid(True)
+
+# Grafi?i gösteriyoruz
+plt.show()
+
+
+######################## preplexity code ba?lang?ç
+dff_d = snow_dict["100362"]
+
+# Define a function to calculate weighted moving average
+def weighted_moving_average(series, window_size):
+    weights = np.arange(1, window_size + 1)
+    return series.rolling(window=window_size).apply(lambda x: np.dot(x, weights) / weights.sum(), raw=True)
+
+# Fill NaN values with weighted moving average
+window_size = 3  # You can adjust the window size as needed
+filled_series = dff_d.copy()
+
+for i in range(len(filled_series)):
+    if pd.isna(filled_series.iloc[i]):
+        # Calculate weighted average for the current window
+        window = filled_series.iloc[max(0, i-window_size+1):i+1]
+        if not window.isna().all():
+            filled_value = weighted_moving_average(window, len(window)).iloc[-1]
+            filled_series.iloc[i] = filled_value
+
+print(filled_series)
+
+
+##############################
+# D?LARA
+
+def sarima_alternatifi(dict):
+    new_dict = {}
+    for df_name, df in dict.items():
+        df_copy = df.copy(deep=True)  # Create a deep copy
+        df_copy.replace('NaN', np.nan, inplace=True)
+        first_valid_index = df_copy['Values'].first_valid_index()
+        valid_values = df_copy.loc[first_valid_index:].copy()
+
+        # Fill NaNs with the corresponding monthly means
+        for month in range(1, 13):
+            month_mean = valid_values[valid_values.index.month == month]['Values'].dropna().mean()
+            valid_values.loc[valid_values.index.month == month, 'Values'] = valid_values.loc[
+                valid_values.index.month == month, 'Values'].fillna(month_mean)
+
+        # Update the copied DataFrame with filled values
+        df_copy.update(valid_values)
+        new_dict[df_name] = df_copy  # Store the modified copy
+
+    return new_dict
+
+conductivity_dict_alternatif = sarima_alternatifi(conductivity_dict_monthly)
+mean_doldurulmus = conductivity_dict_alternatif["395012"]
+conductivity_dict_monthly["395012"]
+
+dff = conductivity_dict_monthly["395012"].copy()
+mean_dict = {"a": dff}
+sarima_dict = {"b": dff}
+
+filled_mean_dict = sarima_alternatifi(mean_dict)
+filled_sarima_dict = fill_missing_values_with_sarima(sarima_dict)
+
+mean_df = filled_mean_dict["a"]
+sarima_df = filled_sarima_dict["b"]
+
+#mean_df = filled_mean_dict["a"]
+#sarima_df = filled_sarima_dict["b"]
+
+for key, value in conductivity_dict.items():
+    print(value.shape)
+
+plt.figure(figsize=(10, 6))
+plt.plot(mean_df.index, mean_df['Values'], label='mean', marker='o')
+plt.plot(sarima_df.index, sarima_df['final_values'], label='sarima', marker ="x")
+plt.plot(sarima_df.index, sarima_df['Values'], label='orijinal')
+# Grafik özelliklerini ayarl?yoruz
+plt.title('Çizgi Grafi?i')
+plt.xlabel('Tarih')
+plt.ylabel('De?erler')
+plt.legend()
+plt.grid(True)
+
+# Grafi?i gösteriyoruz
+plt.show()
+
+
+
+#########
 filled_data_gw_temp_dict = fill_missing_values_with_sarima(data_gw_temp_dict)
 filled_conductivity_dict = fill_missing_values_with_sarima(conductivity_dict_monthly)
 filled_source_flow_rate_dict = fill_missing_values_with_sarima(source_flow_rate_dict_monthly)
@@ -546,8 +750,8 @@ filled_rain_dict = fill_missing_values_with_sarima(rain_dict_monthly)
 
 
 # write pickle
-with open('filled_sediment_dict_monthly.pkl', 'wb') as f:
-    pickle.dump(filled_sediment_dict_monthly, f)
+with open('filled_sediment_dict.pkl', 'wb') as f:
+    pickle.dump(filled_sediment_dict, f)
 
 with open('filled_surface_water_level_dict_monthly.pkl', 'wb') as f:
     pickle.dump(filled_surface_water_level_dict_monthly, f)
@@ -608,7 +812,7 @@ data = pd.read_csv("data.csv")
 #######################################################################
 # sözlüklerin içindeki serileri dataframe yap?yorum.
 dict_list = [filled_conductivity_dict, filled_data_gw_temp_dict, filled_groundwater_dict, filled_rain_dict,
-             filled_sediment_dict_monthly, filled_snow_dict_monthly, filled_source_flow_rate_dict,
+             filled_sediment_dict, filled_snow_dict_monthly, filled_source_flow_rate_dict,
              filled_source_temp_dict, filled_surface_water_flow_rate_dict_monthly,
              filled_surface_water_level_dict_monthly, filled_surface_water_temp_dict]
 
@@ -993,4 +1197,5 @@ model.compile(optimizer='adam', loss='mse')
 
 # Modeli e?itme
 history = model.fit(X_train, y_train, epochs=50, batch_size=32, validation_data=(X_test, y_test))
+
 
