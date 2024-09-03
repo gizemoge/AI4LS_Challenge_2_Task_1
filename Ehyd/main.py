@@ -101,8 +101,6 @@ def to_dataframe(folder_path, tip_coordinates):
                                     except ValueError:
                                         continue
 
-                                value_str = value_str.strip().replace('Lücke', 'NaN')  # Convert 'Lücke' to NaN
-
                                 # Skip rows with invalid data or specific keywords
                                 if any(keyword in value_str for keyword in ["F", "K", "rekonstruiert aus Version 3->"]):
                                     continue
@@ -111,9 +109,10 @@ def to_dataframe(folder_path, tip_coordinates):
                                 try:
                                     value = np.float32(value_str.replace(',', '.'))
                                 except ValueError:
-                                    continue
+                                    value = np.nan  # Assign NaN if conversion fails
 
                                 data.append([date, value])
+
                             except Exception:
                                 break
 
@@ -224,30 +223,9 @@ surface_water_coordinates = station_coordinates("Surface_Water")
 
 # Precipitation: Rain and Snow
 precipitation_folders = [
-    ("Precipitation/N-Tagessummen", "rain_"),
-    ("Precipitation/NS-Tagessummen", "snow_")]
-for folder, prefix in precipitation_folders:
-    dict_name, dict_coord = f"{prefix}_dict", f"{prefix}_coordinates"
-    dict_name, dict_coord = process_and_store_data(os.path.join("Ehyd", "datasets_ehyd", folder), precipitation_coordinates, prefix)
+    ("N-Tagessummen", "rain_"),
+    ("NS-Tagessummen", "snow_")]
 
-######### gizmo
-for folder, prefix in precipitation_folders:
-    dict_name, dict_coord = process_and_store_data(os.path.join("Ehyd", "datasets_ehyd", folder), precipitation_coordinates, prefix)
-    globals()[f"{prefix}_dict"] = dict_name
-    globals()[f"{prefix}_coordinates"] = dict_coord
-##########
-def create_dict(main_folder, coordinates):
-    for folder, prefix in main_folder:
-        dict_name, dict_coord = process_and_store_data(os.path.join("Ehyd", "datasets_ehyd", folder), coordinates, prefix)
-        globals()[f"{prefix}_dict"] = dict_name
-        globals()[f"{prefix}_coordinates"] = dict_coord
-
-create_dict(precipitation_folders, precipitation_folders)
-create_dict(source_folders, source_folders)
-create_dict(source_folders, )
-
-
-# Sources: Flow Rate, Conductivity, Temperature
 source_folders = [
     ("Quellschüttung-Tagesmittel", "source_fr_"),
     ("Quellleitfähigkeit-Tagesmittel", "conductivity_"),
@@ -276,12 +254,6 @@ surface_water_lvl_dict, surface_water_lvl_coord = process_and_store_data(os.path
 surface_water_temp_dict, surface_water_temp_coord = process_and_store_data(os.path.join("Ehyd", "datasets_ehyd", "Surface_Water", surface_water_folders[1][0]), surface_water_coordinates, "surface_water_temp_")
 sediment_dict, sediment_coord = process_and_store_data(os.path.join("Ehyd", "datasets_ehyd", "Surface_Water", surface_water_folders[2][0]), surface_water_coordinates, "sediment_")
 surface_water_fr_dict, surface_water_fr_coord = process_and_store_data(os.path.join("Ehyd", "datasets_ehyd", "Surface_Water", surface_water_folders[3][0]), surface_water_coordinates, "surface_water_fr_")
-
-# gizmo
-for folder, prefix in surface_water_folders:
-    dict_name, dict_coord = process_and_store_data(os.path.join("Ehyd", "datasets_ehyd", folder), surface_water_coordinates, prefix)
-    globals()[f"{prefix}_dict"] = dict_name
-    globals()[f"{prefix}_coordinates"] = dict_coord
 
 # Save data to pickle files
 dicts_list = [gw_temp_dict, filtered_groundwater_dict, snow_dict, rain_dict, conduct_dict, source_fr_dict,
@@ -588,5 +560,4 @@ model.compile(optimizer='adam', loss='mse')
 
 # Modeli e?itme
 history = model.fit(X_train, y_train, epochs=50, batch_size=32, validation_data=(X_test, y_test))
-
 
