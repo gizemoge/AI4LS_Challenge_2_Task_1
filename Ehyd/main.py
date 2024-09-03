@@ -2,8 +2,9 @@
 import os
 import warnings
 from statsmodels.tools.sm_exceptions import ConvergenceWarning
-warnings.simplefilter('ignore', category=ConvergenceWarning)
-import pandas as pd
+from sklearn.model_selection import train_test_split
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense
 from datetime import datetime
 from scipy.spatial import distance
 from collections import Counter
@@ -23,9 +24,7 @@ pd.set_option('display.max_rows', None)
 pd.set_option('display.float_format', lambda x: '%.3f' % x)
 pd.set_option('display.max_colwidth', None)
 pd.set_option('display.width', 500)
-from sklearn.model_selection import train_test_split
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense
+warnings.simplefilter('ignore', category=ConvergenceWarning)
 
 # FUNCTIONS
 def station_coordinates(input):
@@ -146,21 +145,26 @@ def to_global(dataframes_dict, prefix=''):
         globals()[f"{prefix}{name}"] = dataframe
 
 def process_dataframes(df_dict):
+    """
+    Processes a dictionary of DataFrames by converting date columns, resampling daily data to monthly, and reindexing.
+
+    Args:
+        df_dict (dict): A dictionary where keys are DataFrame names and values are DataFrames.
+
+    Returns:
+        dict: The processed dictionary of DataFrames with date conversion, resampling, and reindexing applied.
+    """
     for df_name, df_value in df_dict.items():
-        # Tarih sütununu datetime format?na çevir
         df_value['Date'] = pd.to_datetime(df_value['Date'])
 
-        # Günlük verileri ayl?k veriye dönü?tür
         if df_value['Date'].dt.to_period('D').nunique() > df_value['Date'].dt.to_period('M').nunique():
             df_value.set_index('Date', inplace=True)
-            df_dict[df_name] = df_value.resample('MS').mean()  # MS: Ay ba??
+            df_dict[df_name] = df_value.resample('MS').mean()
 
-        # Ayl?k veriler için sadece indeks ayarla
         else:
             df_value.set_index('Date', inplace=True)
             df_dict[df_name] = df_value
 
-        # Mevcut indeksi yeniden indeksle ve join yöntemiyle birle?tir
         all_dates = pd.date_range(start='1960-01-01', end='2021-12-01', freq='MS')
         new_df = pd.DataFrame(index=all_dates)
         df_dict[df_name] = new_df.join(df_dict[df_name], how='left').fillna("NaN")
@@ -178,12 +182,9 @@ def process_and_store_data(folder, coordinates, prefix, points_list=None):
 
     if points_list:
         data_dict = filter_dataframes_by_points(data_dict, points_list)
+        data_coordinates = data_coordinates[data_coordinates['hzbnr01'].astype(str).isin(points_list)]
 
     return data_dict, data_coordinates
-
-def save_to_pickle(data_dict, filename):
-    with open(filename, 'wb') as f:
-        pickle.dump(data_dict, f)
 
 def filter_dataframes_by_points(dataframes_dict, points_list):
     """
@@ -199,9 +200,21 @@ def filter_dataframes_by_points(dataframes_dict, points_list):
     filtered_dict = {name: df for name, df in dataframes_dict.items() if name in points_list}
     return filtered_dict
 
-#####################################
+def save_to_pickle(item, filename):
+    """
+    Saves a dictionary to a pickle file.
+
+    Args:
+        data_dict (dict): The dictionary to save.
+        filename (str): The path to the output pickle file.
+    """
+    with open(filename, 'wb') as f:
+        pickle.dump(item, f)
+
+
+########################################################################################################################
 # Creating Dataframes from given CSVs
-#####################################
+########################################################################################################################
 
 # Define paths and coordinates
 groundwater_all_coordinates = station_coordinates("Groundwater")
@@ -257,7 +270,7 @@ gw_temp_dict, gw_temp_coordinates = process_and_store_data(os.path.join("Ehyd", 
 rain_dict, rain_coord = process_and_store_data(os.path.join("Ehyd", "datasets_ehyd", "Precipitation", precipitation_folders[0][0]), precipitation_coordinates, "rain_")
 snow_dict, snow_coord = process_and_store_data(os.path.join("Ehyd", "datasets_ehyd", "Precipitation", precipitation_folders[1][0]), precipitation_coordinates, "snow_")
 source_fr_dict, source_fr_coord = process_and_store_data(os.path.join("Ehyd", "datasets_ehyd", "Sources", source_folders[0][0]), sources_coordinates, "source_fr_")
-conduct_dict, conduct_coord = process_and_store_data(os.path.join("Ehyd", "datasets_ehyd", "Sources", precipitation_folders[1][0]), sources_coordinates, "conduct_")
+conduct_dict, conduct_coord = process_and_store_data(os.path.join("Ehyd", "datasets_ehyd", "Sources", source_folders[1][0]), sources_coordinates, "conduct_")
 source_temp_dict, source_temp_coord = process_and_store_data(os.path.join("Ehyd", "datasets_ehyd", "Sources", source_folders[2][0]), sources_coordinates, "source_temp_")
 surface_water_lvl_dict, surface_water_lvl_coord = process_and_store_data(os.path.join("Ehyd", "datasets_ehyd", "Surface_Water", surface_water_folders[0][0]), surface_water_coordinates, "surface_water_lvl_")
 surface_water_temp_dict, surface_water_temp_coord = process_and_store_data(os.path.join("Ehyd", "datasets_ehyd", "Surface_Water", surface_water_folders[1][0]), surface_water_coordinates, "surface_water_temp_")
@@ -271,21 +284,15 @@ for folder, prefix in surface_water_folders:
     globals()[f"{prefix}_coordinates"] = dict_coord
 
 # Save data to pickle files
-pickle_files = {
-    'gw_temp_dict.pkl': gw_temp_dict,
-    'filtered_groundwater_dict.pkl': filtered_groundwater_dict,
-    'snow_dict.pkl': snow_dict,
-    'rain_dict.pkl': rain_dict,
-    'surface_water_level_dict.pkl': surface_water_level_dict, #burada "monthly" vard?, sildim
-    'surface_water_flow_rate_dict.pkl': surface_water_fdictlow_rate_dict, #burada "monthly" vard?, sildim
-    'surface_water_temp_dict.pkl': surface_water_temp_dict,
-    'conductivity_dict.pkl': conductivity_dict ,#burada sadece sa?da "monthly" vard?, sildim
-    'source_flow_rate_dict.pkl': source_flow_rate_dict,
-    'source_temp_dict.pkl': source_temp_dict}
+dicts_list = [gw_temp_dict, filtered_groundwater_dict, snow_dict, rain_dict, conduct_dict, source_fr_dict,
+              source_temp_dict, surface_water_lvl_dict, surface_water_fr_dict, surface_water_temp_dict, sediment_dict]
 
-for filename, data_dict in pickle_files.items():
-    save_to_pickle(data_dict, filename)
+directory = 'Ehyd/pkl_files'
 
+for dictionary in dicts_list:
+    dict_name = [name for name in globals() if globals()[name] is dictionary][0]
+    filename = os.path.join(directory, f'{dict_name}.pkl')
+    save_to_pickle(dictionary, filename)
 
 ########################################################################################################################
 # Gathering associated features for 487 stations
@@ -336,51 +343,20 @@ def add_nearest_coordinates_column(df_to_add, name, k, df_to_merge=None):
 
     return df
 
-data = add_nearest_coordinates_column(groundwater_temperature_coordinates, 'nearest_gw_temp', 1, df_to_merge=filtered_gw_coordinates)
-data = add_nearest_coordinates_column(rain_coordinates, 'nearest_rain', 3, df_to_merge=data) # TODO burada data arguman? default oldugu icin silebiliriz.
-data = add_nearest_coordinates_column(snow_coordinates, 'nearest_snow', 3, df_to_merge=data)
-data = add_nearest_coordinates_column(source_flow_rate_coordinates, 'nearest_source_fr', 1, df_to_merge=data)
-data = add_nearest_coordinates_column(conductivity_coordinates, 'nearest_conductivity', 1, df_to_merge=data)
-data = add_nearest_coordinates_column(source_temp_coordinates, 'nearest_source_temp', 1, df_to_merge=data)
-data = add_nearest_coordinates_column(surface_water_level_coordinates, 'nearest_owf_level', 3, df_to_merge=data)
-data = add_nearest_coordinates_column(surface_water_temp_coordinates, 'nearest_owf_temp', 1, df_to_merge=data)
-data = add_nearest_coordinates_column(sediment_coordinates, 'nearest_sediment', 1, df_to_merge=data)
-data = add_nearest_coordinates_column(surface_water_flow_rate_coordinates, 'nearest_owf_fr', 3, df_to_merge=data)
+data = add_nearest_coordinates_column(gw_temp_coordinates, 'nearest_gw_temp', 1, df_to_merge=filtered_gw_coordinates)
+data = add_nearest_coordinates_column(rain_coord, 'nearest_rain', 3, df_to_merge=data) # TODO burada data arguman? default oldugu icin silebiliriz.
+data = add_nearest_coordinates_column(snow_coord, 'nearest_snow', 3, df_to_merge=data)
+data = add_nearest_coordinates_column(source_fr_coord, 'nearest_source_fr', 1, df_to_merge=data)
+data = add_nearest_coordinates_column(conduct_coord, 'nearest_conductivity', 1, df_to_merge=data)
+data = add_nearest_coordinates_column(source_temp_coord, 'nearest_source_temp', 1, df_to_merge=data)
+data = add_nearest_coordinates_column(surface_water_lvl_coord, 'nearest_owf_level', 3, df_to_merge=data)
+data = add_nearest_coordinates_column(surface_water_temp_coord, 'nearest_owf_temp', 1, df_to_merge=data)
+data = add_nearest_coordinates_column(sediment_coord, 'nearest_sediment', 1, df_to_merge=data)
+data = add_nearest_coordinates_column(surface_water_fr_coord, 'nearest_owf_fr', 3, df_to_merge=data)
 data.drop(["x", "y"], axis=1, inplace=True)
 
-data.to_csv('data.csv', index=False)
-
-###################################################################################
-# yer alt? suyu s?cakl?k tur?usu için data datframe'ine göre azaltma i?lemleri
-################################################################################
-data['nearest_gw_temp'].explode().nunique()  # 276
-
-# data_gw_temp_dict isimli yeni sözlü?ü olu?turuyoruz
-data_gw_temp_dict = {}
-
-# nearest_gw_temp kolonundaki her bir listeyi döngü ile al?yoruz
-for key_list in data['nearest_gw_temp']:
-    # Liste içindeki her bir de?eri string'e çevirip kontrol ediyoruz
-    for key in key_list:
-        str_key = str(key)
-        # E?er str_key groundwater_temperature_dict'te varsa, bu key ve ilgili dataframe'i yeni sözlü?e ekle
-        if str_key in groundwater_temperature_dict:
-            data_gw_temp_dict[str_key] = groundwater_temperature_dict[str_key]
-
-len(data_gw_temp_dict)  # 276
-
-with open('data_gw_temp_dict.pkl', 'wb') as f:
-    pickle.dump(data_gw_temp_dict, f)
-
-
-# buradayd?k - pickle'dan çekme
-pkl_files = [f for f in os.listdir() if f.endswith('.pkl')]
-
-for pkl_file in pkl_files:
-    with open(pkl_file, 'rb') as file:
-        var_name = pkl_file[:-4]
-        globals()[var_name] = pickle.load(file)
-
+file_path = os.path.join(directory, 'data.pkl')
+save_to_pickle(data, file_path)
 
 ########################################################################################################################
 # Imputing NaN Values
@@ -405,426 +381,172 @@ def nan_imputer(dict):
 
     return new_dict
 
-#########
-filled_data_gw_temp_dict = nan_imputer(data_gw_temp_dict)
-filled_conductivity_dict = nan_imputer(conductivity_dict_monthly)
-filled_source_flow_rate_dict = nan_imputer(source_flow_rate_dict_monthly)
-filled_source_temp_dict = nan_imputer(source_temp_dict_monthly)
-filled_rain_dict = nan_imputer(rain_dict_monthly)
-filled_data_gw_temp_dict = nan_imputer(data_gw_temp_dict)
-filled_conductivity_dict = nan_imputer(conductivity_dict_monthly)
-filled_source_flow_rate_dict = nan_imputer(source_flow_rate_dict_monthly)
-filled_source_temp_dict = nan_imputer(source_temp_dict_monthly)
-filled_rain_dict = nan_imputer(rain_dict_monthly)
+filled_filtered_groundwater_dict = nan_imputer(filtered_groundwater_dict)
+filled_gw_temp_dict = nan_imputer(gw_temp_dict)
+filled_rain_dict = nan_imputer(rain_dict)
+filled_snow_dict = nan_imputer(snow_dict)
+filled_source_fr_dict = nan_imputer(source_fr_dict)
+filled_source_temp_dict = nan_imputer(source_temp_dict)
+filled_conduct_dict = nan_imputer(conduct_dict)
+filled_surface_water_fr_dict = nan_imputer(surface_water_fr_dict)
+filled_surface_water_lvl_dict = nan_imputer(surface_water_lvl_dict)
+filled_surface_water_temp_dict = nan_imputer(surface_water_temp_dict)
+filled_sediment_dict = nan_imputer(sediment_dict)
 
+# Sözlüklerinizi içeren liste ve isimlerini saklay?n
+dicts_with_names = {
+    'filled_gw_temp_dict': filled_gw_temp_dict,
+    'filled_filtered_groundwater_dict': filled_filtered_groundwater_dict,
+    'filled_snow_dict': filled_snow_dict,
+    'filled_rain_dict': filled_rain_dict,
+    'filled_conduct_dict': filled_conduct_dict,
+    'filled_source_fr_dict': filled_source_fr_dict,
+    'filled_source_temp_dict': filled_source_temp_dict,
+    'filled_surface_water_lvl_dict': filled_surface_water_lvl_dict,
+    'filled_surface_water_fr_dict': filled_surface_water_fr_dict,
+    'filled_surface_water_temp_dict': filled_surface_water_temp_dict,
+    'filled_sediment_dict': filled_sediment_dict
+}
 
-# write pickle
-with open('filled_sediment_dict.pkl', 'wb') as f:
-    pickle.dump(filled_sediment_dict, f)
+# Her bir sözlü?ü isimleriyle `.pkl` dosyas?na kaydetme
+for dict_name, dictionary in dicts_with_names.items():
+    filename = os.path.join(directory, f'{dict_name}.pkl')
+    save_to_pickle(dictionary, filename)
 
-with open('filled_surface_water_level_dict_monthly.pkl', 'wb') as f:
-    pickle.dump(filled_surface_water_level_dict_monthly, f)
-
-with open('filled_surface_water_flow_rate_dict_monthly.pkl', 'wb') as f:
-    pickle.dump(filled_surface_water_flow_rate_dict_monthly, f)
-
-with open('filled_surface_water_temp_dict.pkl', 'wb') as f:
-    pickle.dump(filled_surface_water_temp_dict, f)
-
-with open('filled_groundwater_dict.pkl', 'wb') as f:
-    pickle.dump(filled_groundwater_dict, f)
-
-with open('filled_snow_dict_monthly.pkl', 'wb') as f:
-    pickle.dump(filled_snow_dict_monthly, f)
-
-with open('filled_data_gw_temp_dict.pkl', 'wb') as f:
-    pickle.dump(filled_data_gw_temp_dict, f)
-
-with open('filled_conductivity_dict.pkl', 'wb') as f:
-    pickle.dump(filled_conductivity_dict, f)
-
-with open('filled_source_flow_rate_dict.pkl', 'wb') as f:
-    pickle.dump(filled_source_flow_rate_dict, f)
-
-with open('filled_source_temp_dict.pkl', 'wb') as f:
-    pickle.dump(filled_source_temp_dict, f)
-
-with open('filled_rain_dict.pkl', 'wb') as f:
-    pickle.dump(filled_rain_dict, f)
-
-
-
-###############################################################################################################
-###############################################################################################################
-############################# TURSUDAN SONRASINI ÇALI?TIRAB?L?R?Z #############################################
-###############################################################################################################
-###############################################################################################################
-# Pickle dosyalar?n? toplu açma i?lemi:
-pkl_files = [f for f in os.listdir() if f.endswith('.pkl')]
+# Calling pickle files back from the directory
+pkl_files = [f for f in os.listdir(directory) if f.endswith('.pkl')]
 
 for pkl_file in pkl_files:
-    with open(pkl_file, 'rb') as file:
+    file_path = os.path.join(directory, pkl_file)
+    with open(file_path, 'rb') as file:
         var_name = pkl_file[:-4]
         globals()[var_name] = pickle.load(file)
 
-data = pd.read_csv("data.csv")
+########################################################################################################################
+# Adding lagged values and rolling means
+########################################################################################################################
+filled_dict_list = [filled_gw_temp_dict, filled_filtered_groundwater_dict, filled_snow_dict, filled_rain_dict,
+                    filled_conduct_dict, filled_source_fr_dict, filled_source_temp_dict, filled_surface_water_lvl_dict,
+                    filled_surface_water_fr_dict, filled_surface_water_temp_dict, filled_sediment_dict]
 
-#######################################################################
-
-# 0. lstm'ye girecek ayl?k dataseti iskeletlerini haz?rla
-# 1. bu a?a??dakileri dene,
-# 2. yeralt? su seviyeleri ile korelasyonlar?na bak
-# 3. her noktan?n en iyi korele oldu?u sütunu seç
-# 4. lstm'ye girecek final verisetine o sütunu koy ya?mur için.
-# 5. bunu kar, sediment vs için de yap.
-
-#######################################################################
-# sözlüklerin içindeki serileri dataframe yap?yorum.
-dict_list = [filled_conductivity_dict, filled_data_gw_temp_dict, filled_groundwater_dict, filled_rain_dict,
-             filled_sediment_dict, filled_snow_dict_monthly, filled_source_flow_rate_dict,
-             filled_source_temp_dict, filled_surface_water_flow_rate_dict_monthly,
-             filled_surface_water_level_dict_monthly, filled_surface_water_temp_dict]
-
-
-# Dict list içindeki her bir sözlü?ün value'lar?n? DataFrame yapacak fonksiyon
-def convert_series_to_dataframe(d):
-    for key in d:
-        d[key] = d[key].to_frame(name=key)
-    return d
-
-for i in range(len(dict_list)):
-    dict_list[i] = convert_series_to_dataframe(dict_list[i])
-
-# TODO SARIMA gerek
-# hangi sözlükte kaç? 2021 aral?kta bitmiyor:
-mapping_dict = {
-    'hzbnr01': filled_groundwater_dict,
-    'nearest_gw_temp': filled_data_gw_temp_dict,
-    'nearest_rain': filled_rain_dict,
-    'nearest_snow': filled_snow_dict_monthly,
-    'nearest_source_fr': filled_source_flow_rate_dict,
-    'nearest_conductivity': filled_conductivity_dict,
-    'nearest_source_temp': filled_source_temp_dict,
-    'nearest_owf_level': filled_surface_water_level_dict_monthly,
-    'nearest_owf_temp': filled_surface_water_temp_dict,
-    'nearest_sediment': filled_sediment_dict_monthly,
-    'nearest_owf_fr': filled_surface_water_flow_rate_dict_monthly,
-}
-
-# Son indeks 2021 Aral?k olmayan DataFrame'lerin say?s?n? saklayacak bir sözlük olu?turun
-non_dec_2021_counts = {key: 0 for key in mapping_dict.keys()}
-
-##########
-# Mevcut olan kodlar? saklamak için sözlükleri ba?lat
-existing_codes_dict = {}
-
-# Tüm sözlükleri döngüye al
-for key, df_dict in mapping_dict.items():
-    # Listeyi ba?lat
-    key_list = []
-
-    for code, df in df_dict.items():
-        if not df.empty:
-            # ?ndeksi datetime format?na dönü?tür
-            df.index = pd.to_datetime(df.index, errors='coerce')
-            last_index = df.index[-1]
-
-            if last_index is not pd.NaT and not (last_index.year == 2021 and last_index.month == 12):
-                non_dec_2021_counts[key] += 1
-                print(f"{key} - Code: {code}, Last Index: {last_index}, 2021 Aral?k de?il")
-                key_list.append(str(code))  # code'u string olarak ekle
-        else:
-            print(f"{key} - Code: {code} DataFrame is empty")
-
-    # Benzersiz kodlar? elde et
-    key_list = list(set(key_list))
-
-    if key_list:
-        globals()[f"{key}_list"] = key_list
-
-# Mevcut olan kodlar? 'data' DataFrame'inde kontrol edip sözlüklerde sakla
-for key in mapping_dict.keys():
-    list_name = f"{key}_list"
-    if list_name in globals():
-        current_list = globals()[list_name]
-        print(f"\n{list_name}: {current_list}")
-        print(f"{list_name} uzunlu?u: {len(current_list)}")
-
-        # 'data' DataFrame'indeki ilgili sütunu kontrol et
-        if key in data.columns:
-            existing_codes_dict[key] = []
-            for code in current_list:
-                if data[key].str.contains(code).any():
-                    print(f"{code} {key} sütununda mevcut.")
-                    existing_codes_dict[key].append(code)  # Mevcut olan kodu sözlü?e ekle
-                else:
-                    print(f"{code} {key} sütununda bulunamad?.")
-            # Mevcut olan kod listesinin uzunlu?unu yazd?r
-            print(f"Mevcut olan kodlar?n uzunlu?u {key}: {len(existing_codes_dict[key])}")
-        else:
-            print(f"{key} isimli sütun 'data' DataFrame'inde mevcut de?il.")
-    else:
-        print(f"{list_name} listesi bo? veya olu?turulmad?.")
-
-# Sonuçlar? yazd?r
-print("\nMevcut olan kodlar:")
-for key, codes in existing_codes_dict.items():
-    print(f"{key}: {codes}")
-    print(f"{key} için mevcut kod say?s?: {len(codes)}")
-#########
-# burada existing_codes_dict sözlü?ündeki dataframeleri Sarima ile 2021e kadar olmayanlar? doldurmay? deneyelim:
-
-def sarima_forecast_for_nan(mapping_dict, existing_codes_dict):
-    """
-    Bu fonksiyon, mapping_dict içindeki her DataFrame için,
-    existing_codes_dict'teki ID'lerle e?le?en DataFrame'lerin ba?l?klar?n? yazd?r?r
-    ve her key için kaç adet head yazd?r?ld???n? bildirir.
-
-    :param mapping_dict: Anahtarlar?n DataFrame'lere e?lendi?i sözlük
-    :param existing_codes_dict: Her anahtar için ID listelerinin bulundu?u sözlük
-    """
-    total_counts = []  # Her bir key için yazd?r?lan head say?s?n? tutacak liste
-
-    for key, data_dict in mapping_dict.items():
-        count = 0  # Her key için yazd?r?lan head say?s?n? takip etmek için sayaç
-
-        # E?er data_dict bir sözlükse (DataFrame'lerin bulundu?u sözlük)
-        if isinstance(data_dict, dict):
-            ids_list = existing_codes_dict.get(key, [])
-            for data_id in ids_list:
-                # ID'nin anahtar olarak bulundu?u DataFrame'i al
-                if data_id in data_dict:
-                    df = data_dict[data_id]
-                    # DataFrame'in head'ini yazd?r
-                    print(f"Head of DataFrame for ID {data_id} in '{key}':")
-                    print(df.head())
-                    print("\n")  # Her bir DataFrame aras?na bo?luk ekler
-                    count += 1  # Her yazd?r?lan head için sayac? art?r
-                else:
-                    print(f"ID {data_id} not found in the dictionary for key '{key}'.")
-        else:
-            print(f"Value for key '{key}' is not a dictionary or DataFrame.")
-
-        # Her bir key için kaç adet head yazd?r?ld???n? listeye ekle
-        total_counts.append(f"{key}: {count}")
-
-    # Sonuçlar? tek sat?rda yazd?r
-    print("Total heads printed per key: " + ", ".join(total_counts))
-
-
-# Fonksiyonu kullanmak için:
-sarima_forecast_for_nan(mapping_dict, existing_codes_dict)
-
-
-
-###################333
-# Lag ve rolling mean hesaplamalar?n? gerçekle?tirecek fonksiyon
 def add_lag_and_rolling_mean(df, window=6):
-    # ?lk sütunun ad?n? al
+    """
+    Adds lagged and rolling mean columns to a DataFrame.
+
+    Args:
+        df (pandas.DataFrame): The input DataFrame containing the data.
+        window (int, optional): The window size for calculating the rolling mean. Default is 6.
+
+    Returns:
+        pandas.DataFrame: The DataFrame with additional columns for lagged values and rolling means.
+    """
     column_name = df.columns[0]
-    # 1 lag'li versiyonu ekle
     df[f'lag_1'] = df[column_name].shift(1)
-    # Lag'li ve rolling mean sütunlar?n? ekle
-    for i in range(1, 2):  # Burada 1 lag'li oldu?u için range(1, 2) kullan?yoruz.
+    for i in range(1, 2):
         df[f'rolling_mean_{window}_lag_{i}'] = df[f'lag_1'].shift(i).rolling(window=window).mean()
     return df
 
+for dictionary in filled_dict_list:
+    for key, df in dictionary.items():
+        dictionary[key] = add_lag_and_rolling_mean(df)
 
-for d in dict_list:
-    for key, df in d.items():
-        d[key] = add_lag_and_rolling_mean(df)
-
-for key, value in filled_groundwater_dict.items():
-    print(value[value == 0].count())
-
-nani = filled_groundwater_dict["324095"]
-nani[nani == 0].count()
-
-
+########################################################################################################################
+# Zero Padding
+########################################################################################################################
 def zero_padding(df, start_date='1960-01-01'):
-    # E?er indeks zaten PeriodIndex de?ilse, to_period('M') yap
+    """
+    Fills missing months in a DataFrame with zero padding.
+
+    This function ensures that the DataFrame has a continuous monthly index starting from the specified
+    start date. Missing months are filled with zeroes.
+
+    Args:
+        df (pandas.DataFrame): The input DataFrame with a DateTime or PeriodIndex.
+        start_date (str, optional): The start date for the time series, in 'YYYY-MM-DD' format.
+                                    Default is '1960-01-01'.
+
+    Returns:
+        pandas.DataFrame: The DataFrame with a continuous monthly index, where missing months are filled with zeroes.
+    """
     if not isinstance(df.index, pd.PeriodIndex):
         df.index = df.index.to_period('M')
 
-    # Belirlenen ba?lang?ç tarihi
     start_date = pd.to_datetime(start_date).to_period('M')
-
-    # Tarih aral???n? geni?let
     all_dates = pd.period_range(start=start_date, end=df.index.max(), freq='M')
-
-    # Yeni tarih aral??? için bo? bir veri çerçevesi olu?tur
     new_df = pd.DataFrame(index=all_dates)
-
-    # Eski veri çerçevesini yeni veri çerçevesine birle?tir
     new_df = new_df.join(df, how='left').fillna(0)
-
-    # Periyotlar? datetime'e dönü?tür
     new_df.index = new_df.index.to_timestamp()
 
     return new_df
 
-# Her bir sözlükteki veri çerçevelerini güncelleme
-for dictionary in dict_list:
+for dictionary in filled_dict_list:
     for key in dictionary:
         dictionary[key] = zero_padding(dictionary[key])
 
-
-# 11 sözlükteki tüm dataframe'lerin tüm kolonlar?n? float32'ye çevirme
+########################################################################################################################
+# Changing the data type to float32
+########################################################################################################################
 def convert_to_float32(df):
+    """
+    Converts all columns in a DataFrame to the float32 data type.
+
+    Args:
+        df (pandas.DataFrame): The input DataFrame with columns to be converted.
+
+    Returns:
+        pandas.DataFrame: The DataFrame with all columns converted to float32.
+    """
     return df.astype('float32')
 
-# Her bir sözlükteki veri çerçevelerini veri tipini float32'ye çevirme
-for dictionary in dict_list:
+for dictionary in filled_dict_list:
     for key in dictionary:
-        # Veri tipini float32'ye çevir
         dictionary[key] = convert_to_float32(dictionary[key])
 
+########################################################################################################################
+# LSTM-formatted dataframes and the .pkl file
+########################################################################################################################
+# 732 dataframe
+new_df = pd.DataFrame(index=data['hzbnr01'])
 
-################ 733 dataframe
-list_of_dfs = []
+new_df['ground_water_lvl'] = None
+new_df['ground_water_lvl_lag_1'] = None
+new_df['ground_water_lvl_rolling_mean_6_lag_1'] = None
 
-# 733 ay için döngü
-for month in range(720):
+rows_to_add = []
 
-    index_values = data['hzbnr01']
-    new_df = pd.DataFrame(index=index_values)
+for index in new_df.index:
+    key = str(index)  # Anahtar?n string oldu?una dikkat ediyoruz
 
-    # gw
-    new_df['gw_level'] = None
-    new_df['gw_level_lag_1'] = None
-    new_df['gw_level_rolling_mean_6_lag_1'] = None
+    if key in filled_filtered_groundwater_dict:
+        df = filled_filtered_groundwater_dict[key]
 
-    for index in new_df.index:
-        # ?ndeksi string'e çeviriyoruz
-        str_index = str(index)
-
-        # E?er sözlükte anahtar mevcutsa, ilgili DataFrame'i al?yoruz
-        if str_index in filled_groundwater_dict:
-            relevant_df = filled_groundwater_dict[str_index]
-
-            # ?lk sat?rdaki tüm de?erleri al?yoruz
-            first_row = relevant_df.iloc[0]
-
-            # Bu de?erleri new_df'deki ilgili sat?rlara ekliyoruz
-            new_df.at[index, 'gw_level'] = first_row.iloc[0]  # ?lk kolonun de?eri
-            new_df.at[index, 'gw_level_lag_1'] = first_row.iloc[1]  # ?kinci kolonun de?eri
-            new_df.at[index, 'gw_level_rolling_mean_6_lag_1'] = first_row.iloc[2]  # Üçüncü kolonun de?eri
+        if not df.empty:
+            # Her bir sat?r? new_df'ye ekliyoruz
+            for _, row in df.iterrows():
+                rows_to_add.append([index, row['Values'], row['lag_1'], row['rolling_mean_6_lag_1']])
         else:
-            # Sözlükte anahtar bulunmazsa hata mesaj? yazd?r?yoruz
-            print(f"Warning: Key '{str_index}' not found in filled_groundwater_dict")
+            print(f"DataFrame for key {key} is empty.")
+    else:
+        print(f"Key {key} not found in the dictionary.")
 
-    # birliler
-    def for_one_point(new_df, data, filled_dict, nearest_column, variable_type):
-        # Yeni kolonlar? ba?lat?yoruz
-        new_df[f'{variable_type}'] = None
-        new_df[f'{variable_type}_lag_1'] = None
-        new_df[f'{variable_type}_rolling_mean_6_lag_1'] = None
+# Yeni bir DataFrame olu?turuyoruz ve eski new_df ile birle?tiriyoruz
+new_df_expanded = pd.DataFrame(rows_to_add, columns=['index', 'ground_water_lvl', 'ground_water_lvl_lag_1',
+                                                     'ground_water_lvl_rolling_mean_6_lag_1'])
+new_df_expanded = new_df_expanded.set_index('index')
 
-        # Tüm indekslerde dola??yoruz
-        for index in new_df.index:
-            # data DataFrame'inde hzbnr01 ile e?le?en nearest_column listesini al?yoruz
-            nearest_list_str = data.loc[data['hzbnr01'] == index, nearest_column].values
+# ?ndeks ve de?erleri kontrol ediyoruz
+print(new_df_expanded)
 
-            # E?er nearest_list_str bo? de?ilse
-            if len(nearest_list_str) > 0:
-                # nearest_column listesinin string de?erini gerçek listeye dönü?türüyoruz
-                nearest_list = ast.literal_eval(nearest_list_str[0])
-
-                # nearest_column listesinin ilk eleman?n? al?yoruz
-                if len(nearest_list) > 0:
-                    str_index = str(nearest_list[0])  # Tek eleman? string'e çeviriyoruz
-
-                    # Eleman için
-                    if str_index in filled_dict:
-                        relevant_df = filled_dict[str_index]
-                        if len(relevant_df) > 0:
-                            new_df.at[index, f'{variable_type}'] = relevant_df.iloc[
-                                0, 0]  # ?lk sat?r?n ilk kolon de?eri
-                        if len(relevant_df.columns) > 1:
-                            new_df.at[index, f'{variable_type}_lag_1'] = relevant_df.iloc[
-                                0, 1]  # ?lk sat?r?n ikinci kolon de?eri
-                        if len(relevant_df.columns) > 2:
-                            new_df.at[index, f'{variable_type}_rolling_mean_6_lag_1'] = relevant_df.iloc[
-                                0, 2]  # ?lk sat?r?n üçüncü kolon de?eri
-                    else:
-                        print(f"Warning: Key '{str_index}' not found in {variable_type} dictionary")
-            else:
-                print(f"Warning: No {nearest_column} list found for index '{index}'")
-
-        return new_df
-
-    new_df = for_one_point(new_df, data, filled_data_gw_temp_dict, 'nearest_gw_temp', 'gw_temp')
-    new_df = for_one_point(new_df, data, filled_conductivity_dict, 'nearest_conductivity', 'conductivity')
-    new_df = for_one_point(new_df, data, filled_source_flow_rate_dict, 'nearest_source_fr', 'source_fr')
-    new_df = for_one_point(new_df, data, filled_source_temp_dict, 'nearest_source_temp', 'source_temp')
-    new_df = for_one_point(new_df, data, filled_surface_water_temp_dict, 'nearest_owf_temp', 'owf_temp')
-    new_df = for_one_point(new_df, data, filled_sediment_dict_monthly, 'nearest_sediment', 'sediment')
-
-    # üçlüler
-    def for_three_points(new_df, data, filled_dict, nearest_column, variable_type):
-        # Yeni kolonlar ba?lat?l?yor
-        for i in range(1, 4):
-            new_df[f'{variable_type}_{i}'] = None
-            new_df[f'{variable_type}_{i}_lag_1'] = None
-            new_df[f'{variable_type}_{i}_rolling_mean_6_lag_1'] = None
-
-        # Tüm indekslerde dola??yoruz
-        for index in new_df.index:
-            # data DataFrame'inde hzbnr01 ile e?le?en nearest_column listesini al?yoruz
-            nearest_list_str = data.loc[data['hzbnr01'] == index, nearest_column].values
-
-            # E?er nearest_list_str bo? de?ilse
-            if len(nearest_list_str) > 0:
-                # nearest_column listesinin string de?erini gerçek listeye dönü?türüyoruz
-                nearest_list = ast.literal_eval(nearest_list_str[0])
-
-                # nearest_column listesinin ilk üç eleman?n? al?yoruz
-                for i in range(min(3, len(nearest_list))):
-                    str_index = str(nearest_list[i])  # Eleman? string'e çeviriyoruz
-
-                    # Eleman için
-                    if str_index in filled_dict:
-                        relevant_df = filled_dict[str_index]
-                        if len(relevant_df) > 0:
-                            new_df.at[index, f'{variable_type}_{i + 1}'] = relevant_df.iloc[
-                                0, 0]  # ?lk sat?r?n ilk kolon de?eri
-                        if len(relevant_df.columns) > 1:
-                            new_df.at[index, f'{variable_type}_{i + 1}_lag_1'] = relevant_df.iloc[
-                                0, 1]  # ?lk sat?r?n ikinci kolon de?eri
-                        if len(relevant_df.columns) > 2:
-                            new_df.at[index, f'{variable_type}_{i + 1}_rolling_mean_6_lag_1'] = relevant_df.iloc[
-                                0, 2]  # ?lk sat?r?n üçüncü kolon de?eri
-                    else:
-                        print(f"Warning: Key '{str_index}' not found in {variable_type} dictionary")
-            else:
-                print(f"Warning: No {nearest_column} list found for index '{index}'")
-
-        return new_df
-
-
-    new_df = for_three_points(new_df, data, filled_rain_dict, 'nearest_rain', 'rain')
-    new_df = for_three_points(new_df, data, filled_snow_dict_monthly, 'nearest_snow', 'snow')
-    new_df = for_three_points(new_df, data, filled_surface_water_level_dict_monthly, 'nearest_owf_level', 'owf_level')
-    new_df = for_three_points(new_df, data, filled_surface_water_flow_rate_dict_monthly, 'nearest_owf_fr', 'owf_fr')
-
-
-    # Listeye ekliyoruz
-    list_of_dfs.append(new_df)
-
-# list_of_dfs tur?usu kuruldu
-with open('list_of_dfs.pkl', 'wb') as f:
-    pickle.dump(list_of_dfs, f)
-
-# list_of_dfs tur?udan ç?karma i?lemi
-with open('list_of_dfs.pkl', 'rb') as f:
-    list_of_dfs = pickle.load(f)
-
-################################ Normalizasyon
+########################################################################################################################
+# Normalization
+########################################################################################################################
 scaler = MinMaxScaler(feature_range=(0, 1))
 normalized_dfs = [pd.DataFrame(scaler.fit_transform(df), columns=df.columns) for df in list_of_dfs]
 
-
-#### LSTM - omg it's happening
+# todo son bir datatype'? kontrol edelim
+########################################################################################################################
+# LSTM Model
+########################################################################################################################
 # 1. Veri Haz?rl???
 
 # DataFrame'leri numpy array'lerine dönü?türüp birle?tirin

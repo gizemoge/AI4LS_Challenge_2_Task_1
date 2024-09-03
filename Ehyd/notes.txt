@@ -1036,3 +1036,135 @@ with open('rain_dict.pkl', 'wb') as f:
     pickle.dump(rain_dict, f)
 
 """
+
+# 720
+################ 733 dataframe
+list_of_dfs = []
+
+# 733 ay için döngü
+for month in range(720):
+
+    index_values = data['hzbnr01']
+    new_df = pd.DataFrame(index=index_values)
+
+    # gw
+    new_df['gw_level'] = None
+    new_df['gw_level_lag_1'] = None
+    new_df['gw_level_rolling_mean_6_lag_1'] = None
+
+    for index in new_df.index:
+        # ?ndeksi string'e çeviriyoruz
+        str_index = str(index)
+
+        # E?er sözlükte anahtar mevcutsa, ilgili DataFrame'i al?yoruz
+        if str_index in filled_groundwater_dict:
+            relevant_df = filled_groundwater_dict[str_index]
+
+            # ?lk sat?rdaki tüm de?erleri al?yoruz
+            first_row = relevant_df.iloc[0]
+
+            # Bu de?erleri new_df'deki ilgili sat?rlara ekliyoruz
+            new_df.at[index, 'gw_level'] = first_row.iloc[0]  # ?lk kolonun de?eri
+            new_df.at[index, 'gw_level_lag_1'] = first_row.iloc[1]  # ?kinci kolonun de?eri
+            new_df.at[index, 'gw_level_rolling_mean_6_lag_1'] = first_row.iloc[2]  # Üçüncü kolonun de?eri
+        else:
+            # Sözlükte anahtar bulunmazsa hata mesaj? yazd?r?yoruz
+            print(f"Warning: Key '{str_index}' not found in filled_groundwater_dict")
+
+    # birliler
+    def for_one_point(new_df, data, filled_dict, nearest_column, variable_type):
+        # Yeni kolonlar? ba?lat?yoruz
+        new_df[f'{variable_type}'] = None
+        new_df[f'{variable_type}_lag_1'] = None
+        new_df[f'{variable_type}_rolling_mean_6_lag_1'] = None
+
+        # Tüm indekslerde dola??yoruz
+        for index in new_df.index:
+            # data DataFrame'inde hzbnr01 ile e?le?en nearest_column listesini al?yoruz
+            nearest_list_str = data.loc[data['hzbnr01'] == index, nearest_column].values
+
+            # E?er nearest_list_str bo? de?ilse
+            if len(nearest_list_str) > 0:
+                # nearest_column listesinin string de?erini gerçek listeye dönü?türüyoruz
+                nearest_list = ast.literal_eval(nearest_list_str[0])
+
+                # nearest_column listesinin ilk eleman?n? al?yoruz
+                if len(nearest_list) > 0:
+                    str_index = str(nearest_list[0])  # Tek eleman? string'e çeviriyoruz
+
+                    # Eleman için
+                    if str_index in filled_dict:
+                        relevant_df = filled_dict[str_index]
+                        if len(relevant_df) > 0:
+                            new_df.at[index, f'{variable_type}'] = relevant_df.iloc[
+                                0, 0]  # ?lk sat?r?n ilk kolon de?eri
+                        if len(relevant_df.columns) > 1:
+                            new_df.at[index, f'{variable_type}_lag_1'] = relevant_df.iloc[
+                                0, 1]  # ?lk sat?r?n ikinci kolon de?eri
+                        if len(relevant_df.columns) > 2:
+                            new_df.at[index, f'{variable_type}_rolling_mean_6_lag_1'] = relevant_df.iloc[
+                                0, 2]  # ?lk sat?r?n üçüncü kolon de?eri
+                    else:
+                        print(f"Warning: Key '{str_index}' not found in {variable_type} dictionary")
+            else:
+                print(f"Warning: No {nearest_column} list found for index '{index}'")
+
+        return new_df
+
+    new_df = for_one_point(new_df, data, filled_data_gw_temp_dict, 'nearest_gw_temp', 'gw_temp')
+    new_df = for_one_point(new_df, data, filled_conductivity_dict, 'nearest_conductivity', 'conductivity')
+    new_df = for_one_point(new_df, data, filled_source_flow_rate_dict, 'nearest_source_fr', 'source_fr')
+    new_df = for_one_point(new_df, data, filled_source_temp_dict, 'nearest_source_temp', 'source_temp')
+    new_df = for_one_point(new_df, data, filled_surface_water_temp_dict, 'nearest_owf_temp', 'owf_temp')
+    new_df = for_one_point(new_df, data, filled_sediment_dict_monthly, 'nearest_sediment', 'sediment')
+
+    # üçlüler
+    def for_three_points(new_df, data, filled_dict, nearest_column, variable_type):
+        # Yeni kolonlar ba?lat?l?yor
+        for i in range(1, 4):
+            new_df[f'{variable_type}_{i}'] = None
+            new_df[f'{variable_type}_{i}_lag_1'] = None
+            new_df[f'{variable_type}_{i}_rolling_mean_6_lag_1'] = None
+
+        # Tüm indekslerde dola??yoruz
+        for index in new_df.index:
+            # data DataFrame'inde hzbnr01 ile e?le?en nearest_column listesini al?yoruz
+            nearest_list_str = data.loc[data['hzbnr01'] == index, nearest_column].values
+
+            # E?er nearest_list_str bo? de?ilse
+            if len(nearest_list_str) > 0:
+                # nearest_column listesinin string de?erini gerçek listeye dönü?türüyoruz
+                nearest_list = ast.literal_eval(nearest_list_str[0])
+
+                # nearest_column listesinin ilk üç eleman?n? al?yoruz
+                for i in range(min(3, len(nearest_list))):
+                    str_index = str(nearest_list[i])  # Eleman? string'e çeviriyoruz
+
+                    # Eleman için
+                    if str_index in filled_dict:
+                        relevant_df = filled_dict[str_index]
+                        if len(relevant_df) > 0:
+                            new_df.at[index, f'{variable_type}_{i + 1}'] = relevant_df.iloc[
+                                0, 0]  # ?lk sat?r?n ilk kolon de?eri
+                        if len(relevant_df.columns) > 1:
+                            new_df.at[index, f'{variable_type}_{i + 1}_lag_1'] = relevant_df.iloc[
+                                0, 1]  # ?lk sat?r?n ikinci kolon de?eri
+                        if len(relevant_df.columns) > 2:
+                            new_df.at[index, f'{variable_type}_{i + 1}_rolling_mean_6_lag_1'] = relevant_df.iloc[
+                                0, 2]  # ?lk sat?r?n üçüncü kolon de?eri
+                    else:
+                        print(f"Warning: Key '{str_index}' not found in {variable_type} dictionary")
+            else:
+                print(f"Warning: No {nearest_column} list found for index '{index}'")
+
+        return new_df
+
+
+    new_df = for_three_points(new_df, data, filled_rain_dict, 'nearest_rain', 'rain')
+    new_df = for_three_points(new_df, data, filled_snow_dict_monthly, 'nearest_snow', 'snow')
+    new_df = for_three_points(new_df, data, filled_surface_water_level_dict_monthly, 'nearest_owf_level', 'owf_level')
+    new_df = for_three_points(new_df, data, filled_surface_water_flow_rate_dict_monthly, 'nearest_owf_fr', 'owf_fr')
+
+
+    # Listeye ekliyoruz
+    list_of_dfs.append(new_df)

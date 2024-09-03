@@ -218,7 +218,7 @@ for month in range(720):
 all_dataframes = []
 
 # 720 ay için döngü
-for month in range(720):
+for month in range(732):
     new_df = pd.DataFrame()
     def get_values(index, nearest_col, data_dict, num_items=3):
         nearest_str = data.loc[data['hzbnr01'] == index, nearest_col].values
