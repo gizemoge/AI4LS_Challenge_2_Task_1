@@ -4,6 +4,9 @@ import ast
 import warnings
 import pandas as pd
 from statsmodels.tools.sm_exceptions import ConvergenceWarning
+
+from Ehyd.main import filled_filtered_groundwater_dict
+
 pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', None)
 pd.set_option('display.float_format', lambda x: '%.3f' % x)
@@ -446,3 +449,35 @@ monthly_vals = get_monthly_vals(dict_list, 2021, 12)
 monthly_vals.shape
 #### Normalizasyon yani scaling yapmam?z gerek
 ####################################################
+
+
+# GROUNDWATER
+# Yeni kolonlar? ba?lat?yoruz
+new_df['gw_level'] = None
+new_df['gw_level_lag_1'] = None
+new_df['gw_level_rolling_mean_6_lag_1'] = None
+
+# Tüm indekslerde dola??yoruz
+for index in new_df.index:
+    # ?ndeksi string'e çeviriyoruz
+    str_index = str(index)
+
+    # E?er sözlükte anahtar mevcutsa, ilgili DataFrame'i al?yoruz
+    if str_index in filled_filtered_groundwater_dict:
+        relevant_df = filled_filtered_groundwater_dict[str_index]
+
+        # ?lk sat?rdaki tüm de?erleri al?yoruz
+        first_row = relevant_df.iloc[0]
+
+        # Bu de?erleri new_df'deki ilgili sat?rlara ekliyoruz
+        new_df.at[index, 'gw_level'] = first_row.iloc[0]  # ?lk kolonun de?eri
+        new_df.at[index, 'gw_level_lag_1'] = first_row.iloc[1]  # ?kinci kolonun de?eri
+        new_df.at[index, 'gw_level_rolling_mean_6_lag_1'] = first_row.iloc[2]  # Üçüncü kolonun de?eri
+        new_df.at[index, 'gw_level'] = first_row.iloc[0]  # ?lk kolonun de?eri
+        new_df.at[index, 'gw_level_lag_1'] = first_row.iloc[1]  # ?kinci kolonun de?eri
+        new_df.at[index, 'gw_level_rolling_mean_6_lag_1'] = first_row.iloc[2]  # Üçüncü kolonun de?eri
+        new_df.at[index, 'gw_level'] = first_row.iloc[0]  # ?lk kolonun de?eri
+        new_df.at[index, 'gw_level_lag_1'] = first_row.iloc[1]  # ?kinci kolonun de?eri
+    else:
+        # Sözlükte anahtar bulunmazsa hata mesaj? yazd?r?yoruz
+        print(f"Warning: Key '{str_index}' not found in filled_groundwater_dict")

@@ -255,17 +255,6 @@ surface_water_temp_dict, surface_water_temp_coord = process_and_store_data(os.pa
 sediment_dict, sediment_coord = process_and_store_data(os.path.join("Ehyd", "datasets_ehyd", "Surface_Water", surface_water_folders[2][0]), surface_water_coordinates, "sediment_")
 surface_water_fr_dict, surface_water_fr_coord = process_and_store_data(os.path.join("Ehyd", "datasets_ehyd", "Surface_Water", surface_water_folders[3][0]), surface_water_coordinates, "surface_water_fr_")
 
-# Save data to pickle files
-dicts_list = [gw_temp_dict, filtered_groundwater_dict, snow_dict, rain_dict, conduct_dict, source_fr_dict,
-              source_temp_dict, surface_water_lvl_dict, surface_water_fr_dict, surface_water_temp_dict, sediment_dict]
-
-directory = 'Ehyd/pkl_files'
-
-for dictionary in dicts_list:
-    dict_name = [name for name in globals() if globals()[name] is dictionary][0]
-    filename = os.path.join(directory, f'{dict_name}.pkl')
-    save_to_pickle(dictionary, filename)
-
 ########################################################################################################################
 # Gathering associated features for 487 stations
 ########################################################################################################################
@@ -327,6 +316,7 @@ data = add_nearest_coordinates_column(sediment_coord, 'nearest_sediment', 1, df_
 data = add_nearest_coordinates_column(surface_water_fr_coord, 'nearest_owf_fr', 3, df_to_merge=data)
 data.drop(["x", "y"], axis=1, inplace=True)
 
+directory = 'Ehyd/pkl_files'
 file_path = os.path.join(directory, 'data.pkl')
 save_to_pickle(data, file_path)
 
@@ -365,35 +355,6 @@ filled_surface_water_lvl_dict = nan_imputer(surface_water_lvl_dict)
 filled_surface_water_temp_dict = nan_imputer(surface_water_temp_dict)
 filled_sediment_dict = nan_imputer(sediment_dict)
 
-# Sözlüklerinizi içeren liste ve isimlerini saklay?n
-dicts_with_names = {
-    'filled_gw_temp_dict': filled_gw_temp_dict,
-    'filled_filtered_groundwater_dict': filled_filtered_groundwater_dict,
-    'filled_snow_dict': filled_snow_dict,
-    'filled_rain_dict': filled_rain_dict,
-    'filled_conduct_dict': filled_conduct_dict,
-    'filled_source_fr_dict': filled_source_fr_dict,
-    'filled_source_temp_dict': filled_source_temp_dict,
-    'filled_surface_water_lvl_dict': filled_surface_water_lvl_dict,
-    'filled_surface_water_fr_dict': filled_surface_water_fr_dict,
-    'filled_surface_water_temp_dict': filled_surface_water_temp_dict,
-    'filled_sediment_dict': filled_sediment_dict
-}
-
-# Her bir sözlü?ü isimleriyle `.pkl` dosyas?na kaydetme
-for dict_name, dictionary in dicts_with_names.items():
-    filename = os.path.join(directory, f'{dict_name}.pkl')
-    save_to_pickle(dictionary, filename)
-
-# Calling pickle files back from the directory
-pkl_files = [f for f in os.listdir(directory) if f.endswith('.pkl')]
-
-for pkl_file in pkl_files:
-    file_path = os.path.join(directory, pkl_file)
-    with open(file_path, 'rb') as file:
-        var_name = pkl_file[:-4]
-        globals()[var_name] = pickle.load(file)
-
 ########################################################################################################################
 # Adding lagged values and rolling means
 ########################################################################################################################
@@ -402,20 +363,20 @@ filled_dict_list = [filled_gw_temp_dict, filled_filtered_groundwater_dict, fille
                     filled_surface_water_fr_dict, filled_surface_water_temp_dict, filled_sediment_dict]
 
 # otokorelasyon
-from pandas.plotting import autocorrelation_plot
-
-# Zaman serisi için auto-correlation grafi?i olu?turma
-
-plt.figure(figsize=(10, 6))
-autocorrelation_plot(filled_filtered_groundwater_dict["300111"]["Values"])
-plt.show()
-
-from statsmodels.graphics.tsaplots import plot_acf
-plot_acf(filled_filtered_groundwater_dict["300111"]["Values"], lags=50)
-plt.title('Autocorrelation - ?lk 50 Lag')
-plt.xlabel('Lag')
-plt.ylabel('Autocorrelation')
-plt.show()
+# from pandas.plotting import autocorrelation_plot
+#
+# # Zaman serisi için auto-correlation grafi?i olu?turma
+#
+# plt.figure(figsize=(10, 6))
+# autocorrelation_plot(filled_filtered_groundwater_dict["300111"]["Values"])
+# plt.show()
+#
+# from statsmodels.graphics.tsaplots import plot_acf
+# plot_acf(filled_filtered_groundwater_dict["300111"]["Values"], lags=50)
+# plt.title('Autocorrelation - ?lk 50 Lag')
+# plt.xlabel('Lag')
+# plt.ylabel('Autocorrelation')
+# plt.show()
 
 def add_lag_and_rolling_mean(df, window=6):
     """
@@ -452,6 +413,25 @@ for dictionary in filled_dict_list:
         df = df.astype(np.float32)
         dictionary[key] = df
 
+# finalleri pickle'a alma
+directory = 'Ehyd/pkl_files'
+
+for dictionary in filled_dict_list:
+    dict_name = [name for name in globals() if globals()[name] is dictionary][0]
+    filename = os.path.join(directory, f'final_{dict_name}.pkl')
+    save_to_pickle(dictionary, filename)
+
+# finalleri pickle'dan ç?karma
+# Calling pickle files back from the directory
+pkl_files = [f for f in os.listdir(directory) if f.endswith('.pkl')]
+
+for pkl_file in pkl_files:
+    file_path = os.path.join(directory, pkl_file)
+    with open(file_path, 'rb') as file:
+        var_name = pkl_file[:-4]
+        globals()[var_name] = pickle.load(file)
+
+
 ########################################################################################################################
 # LSTM-formatted dataframes and the .pkl file
 ########################################################################################################################
@@ -474,52 +454,52 @@ for date in date_range:
     for i, row in data.iterrows():
         hzbnr_code = row['hzbnr01']
 
-        # 1. Groundwater Level verisi eklenir (Tüm feature'lar? ekleyin)
-        for gw_code in row['nearest_gw_temp']:
-            if gw_code in filled_gw_temp_dict:
-                for feature in filled_gw_temp_dict[gw_code].columns:
-                    value = filled_gw_temp_dict[gw_code].loc[date, feature]
-                    monthly_df.loc[str(hzbnr_code), f'{feature}_GW_{gw_code}'] = value
+        # # 1. Groundwater Level verisi eklenir (Tüm feature'lar? ekleyin)
+        # for gw_code in row['nearest_gw_temp']:
+        #     if gw_code in filled_gw_temp_dict:
+        #         for feature in filled_gw_temp_dict[gw_code].columns:
+        #             value = filled_gw_temp_dict[gw_code].loc[date, feature]
+        #             monthly_df.loc[str(hzbnr_code), f'{feature}_GW_{gw_code}'] = value
 
         # 2. Rain verisi eklenir (Tüm feature'lar? ekleyin)
-        # Her bir rain_code için
-        # for i, rain_code in enumerate(row['nearest_rain']):
-        #     if str(rain_code) in filled_rain_dict:
-        #         # ilgili rain_dict dataframe'ini al
-        #         rain_df = filled_rain_dict[str(rain_code)]
-        #
-        #         # E?er tarih rain_df'te varsa, tüm özellikleri al ve monthly_df'ye ekle
-        #         if date in rain_df.index:
-        #             for feature in rain_df.columns:
-        #                 value = rain_df.loc[date, feature]
-        #                 monthly_df.loc[str(hzbnr_code), f'Rain_{i + 1}_{feature}'] = value
-        #         else:
-        #             print(f"Tarih {date}, rain code {rain_code} için bulunamad?.")
-        #     else:
-        #         print(f"Rain code {rain_code} filled_rain_dict'te bulunamad?.")
-
-        # Sediment
-        for i, sediment_code in enumerate(row['nearest_sediment']):
-            if str(sediment_code) in filled_sediment_dict:
+        #Her bir rain_code için
+        for i, rain_code in enumerate(row['nearest_rain']):
+            if str(rain_code) in filled_rain_dict:
                 # ilgili rain_dict dataframe'ini al
-                sediment_df = sediment_code[str(sediment_code)]
+                rain_df = filled_rain_dict[str(rain_code)]
 
                 # E?er tarih rain_df'te varsa, tüm özellikleri al ve monthly_df'ye ekle
-                if date in sediment_df.index:
-                    for feature in sediment_code.columns:
-                        value = sediment_code.loc[date, feature]
-                        monthly_df.loc[str(hzbnr_code), f'Sediment_{i + 1}_{feature}'] = value
+                if date in rain_df.index:
+                    for feature in rain_df.columns:
+                        value = rain_df.loc[date, feature]
+                        monthly_df.loc[str(hzbnr_code), f'Rain_{i + 1}_{feature}'] = value
                 else:
-                    print(f"Tarih {date}, sediment code {sediment_code} için bulunamad?.")
+                    print(f"Tarih {date}, rain code {rain_code} için bulunamad?.")
             else:
-                print(f"Sediment code {sediment_code} filled_sediment_dict'te bulunamad?.")
+                print(f"Rain code {rain_code} filled_rain_dict'te bulunamad?.")
 
-        # 3. Snow verisi eklenir (Tüm feature'lar? ekleyin)
-        for snow_code in row['nearest_snow']:
-            if snow_code in filled_snow_dict:
-                for feature in filled_snow_dict[snow_code].columns:
-                    value = filled_snow_dict[snow_code].loc[date, feature]
-                    monthly_df.loc[hzbnr_code, f'{feature}_Snow_{snow_code}'] = value
+        # Sediment
+        # for i, owf_lvl_code in enumerate(row['nearest_owf_level']):
+        #     if str(owf_lvl_code) in filled_surface_water_lvl_dict:
+        #         # ilgili rain_dict dataframe'ini al
+        #         owf_lvl_df = owf_lvl_code[str(owf_lvl_code)]
+        #
+        #         # E?er tarih rain_df'te varsa, tüm özellikleri al ve monthly_df'ye ekle
+        #         if date in owf_lvl_df.index:
+        #             for feature in owf_lvl_code.columns:
+        #                 value = owf_lvl_code.loc[date, feature]
+        #                 monthly_df.loc[str(hzbnr_code), f'Sediment_{i + 1}_{feature}'] = value
+        #         else:
+        #             print(f"Tarih {date}, sediment code {owf_lvl_code} için bulunamad?.")
+        #     else:
+        #         print(f"Sediment code {owf_lvl_df} filled_sediment_dict'te bulunamad?.")
+
+        # # 3. Snow verisi eklenir (Tüm feature'lar? ekleyin)
+        # for snow_code in row['nearest_snow']:
+        #     if snow_code in filled_snow_dict:
+        #         for feature in filled_snow_dict[snow_code].columns:
+        #             value = filled_snow_dict[snow_code].loc[date, feature]
+        #             monthly_df.loc[hzbnr_code, f'{feature}_Snow_{snow_code}'] = value
 
         # Di?er verileri de ayn? ?ekilde ekleyin (örne?in, nearest_source_fr, nearest_conductivity, vb.)
 
@@ -527,7 +507,7 @@ for date in date_range:
     monthly_dfs[f'{date.year}-{date.month}'] = monthly_df
 
 # Sözlükte her bir ay için DataFrame'ler mevcut olacak
-
+###########################################################gizmo
 
 
 
