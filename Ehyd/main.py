@@ -401,6 +401,22 @@ filled_dict_list = [filled_gw_temp_dict, filled_filtered_groundwater_dict, fille
                     filled_conduct_dict, filled_source_fr_dict, filled_source_temp_dict, filled_surface_water_lvl_dict,
                     filled_surface_water_fr_dict, filled_surface_water_temp_dict, filled_sediment_dict]
 
+# otokorelasyon
+from pandas.plotting import autocorrelation_plot
+
+# Zaman serisi için auto-correlation grafi?i olu?turma
+
+plt.figure(figsize=(10, 6))
+autocorrelation_plot(filled_filtered_groundwater_dict["300111"]["Values"])
+plt.show()
+
+from statsmodels.graphics.tsaplots import plot_acf
+plot_acf(filled_filtered_groundwater_dict["300111"]["Values"], lags=50)
+plt.title('Autocorrelation - ?lk 50 Lag')
+plt.xlabel('Lag')
+plt.ylabel('Autocorrelation')
+plt.show()
+
 def add_lag_and_rolling_mean(df, window=6):
     """
     Adds lagged and rolling mean columns to a DataFrame.
@@ -413,9 +429,14 @@ def add_lag_and_rolling_mean(df, window=6):
         pandas.DataFrame: The DataFrame with additional columns for lagged values and rolling means.
     """
     column_name = df.columns[0]
-    df[f'lag_1'] = df[column_name].shift(1)
-    for i in range(1, 2):
-        df[f'rolling_mean_{window}_lag_{i}'] = df[f'lag_1'].shift(i).rolling(window=window).mean()
+    df['lag_1'] = df[column_name].shift(1)
+    df['lag_2'] = df[column_name].shift(2)
+    df['lag_3'] = df[column_name].shift(3)
+
+    df["rolling_mean_original"] = df[column_name].rolling(window=window).mean()
+
+    for i in range(1, 4):
+        df[f'rolling_mean_{window}_lag_{i}'] = df["rolling_mean_original"].shift(i)
     return df
 
 for dictionary in filled_dict_list:
@@ -423,91 +444,92 @@ for dictionary in filled_dict_list:
         dictionary[key] = add_lag_and_rolling_mean(df)
 
 ########################################################################################################################
-# Zero Padding
+# Zero Padding and changing the data type to float32
 ########################################################################################################################
-def zero_padding(df, start_date='1960-01-01'):
-    """
-    Fills missing months in a DataFrame with zero padding.
-
-    This function ensures that the DataFrame has a continuous monthly index starting from the specified
-    start date. Missing months are filled with zeroes.
-
-    Args:
-        df (pandas.DataFrame): The input DataFrame with a DateTime or PeriodIndex.
-        start_date (str, optional): The start date for the time series, in 'YYYY-MM-DD' format.
-                                    Default is '1960-01-01'.
-
-    Returns:
-        pandas.DataFrame: The DataFrame with a continuous monthly index, where missing months are filled with zeroes.
-    """
-    if not isinstance(df.index, pd.PeriodIndex):
-        df.index = df.index.to_period('M')
-
-    start_date = pd.to_datetime(start_date).to_period('M')
-    all_dates = pd.period_range(start=start_date, end=df.index.max(), freq='M')
-    new_df = pd.DataFrame(index=all_dates)
-    new_df = new_df.join(df, how='left').fillna(0)
-    new_df.index = new_df.index.to_timestamp()
-
-    return new_df
-
 for dictionary in filled_dict_list:
-    for key in dictionary:
-        dictionary[key] = zero_padding(dictionary[key])
-
-########################################################################################################################
-# Changing the data type to float32
-########################################################################################################################
-def convert_to_float32(df):
-    """
-    Converts all columns in a DataFrame to the float32 data type.
-
-    Args:
-        df (pandas.DataFrame): The input DataFrame with columns to be converted.
-
-    Returns:
-        pandas.DataFrame: The DataFrame with all columns converted to float32.
-    """
-    return df.astype('float32')
-
-for dictionary in filled_dict_list:
-    for key in dictionary:
-        dictionary[key] = convert_to_float32(dictionary[key])
+    for key, df in dictionary.items():
+        df.fillna(0, inplace=True)
+        df = df.astype(np.float32)
+        dictionary[key] = df
 
 ########################################################################################################################
 # LSTM-formatted dataframes and the .pkl file
 ########################################################################################################################
 # 732 dataframe
-new_df = pd.DataFrame(index=data['hzbnr01'])
+# Tarih aral???n? belirleyin
+date_range = pd.date_range(start='1960-01-01', end='2021-12-01', freq='MS')
 
-new_df['ground_water_lvl'] = None
-new_df['ground_water_lvl_lag_1'] = None
-new_df['ground_water_lvl_rolling_mean_6_lag_1'] = None
+# Sonuçlar? saklamak için bir sözlük olu?turun
+monthly_dfs = {}
 
-rows_to_add = []
+# Her ay için i?lem yap?n
+for date in date_range:
+    # Her ay için bo? bir DataFrame olu?turun
+    monthly_df = pd.DataFrame(index=data['hzbnr01'])
 
-for index in new_df.index:
-    key = str(index)  # Anahtar?n string oldu?una dikkat ediyoruz
+    # DataFrame'in index'i, ilgili y?l-ay olacak ?ekilde ayarlanacak
+    monthly_df.index.name = f'{date.year}-{date.month}'
 
-    if key in filled_filtered_groundwater_dict:
-        df = filled_filtered_groundwater_dict[key]
+    # Her bir sat?r için i?lem yap?n
+    for i, row in data.iterrows():
+        hzbnr_code = row['hzbnr01']
 
-        if not df.empty:
-            # Her bir sat?r? new_df'ye ekliyoruz
-            for _, row in df.iterrows():
-                rows_to_add.append([index, row['Values'], row['lag_1'], row['rolling_mean_6_lag_1']])
-        else:
-            print(f"DataFrame for key {key} is empty.")
-    else:
-        print(f"Key {key} not found in the dictionary.")
+        # 1. Groundwater Level verisi eklenir (Tüm feature'lar? ekleyin)
+        for gw_code in row['nearest_gw_temp']:
+            if gw_code in filled_gw_temp_dict:
+                for feature in filled_gw_temp_dict[gw_code].columns:
+                    value = filled_gw_temp_dict[gw_code].loc[date, feature]
+                    monthly_df.loc[str(hzbnr_code), f'{feature}_GW_{gw_code}'] = value
 
-# Yeni bir DataFrame olu?turuyoruz ve eski new_df ile birle?tiriyoruz
-new_df_expanded = pd.DataFrame(rows_to_add, columns=['index', 'ground_water_lvl', 'ground_water_lvl_lag_1',
-                                                     'ground_water_lvl_rolling_mean_6_lag_1'])
-new_df_expanded = new_df_expanded.set_index('index')
+        # 2. Rain verisi eklenir (Tüm feature'lar? ekleyin)
+        # Her bir rain_code için
+        # for i, rain_code in enumerate(row['nearest_rain']):
+        #     if str(rain_code) in filled_rain_dict:
+        #         # ilgili rain_dict dataframe'ini al
+        #         rain_df = filled_rain_dict[str(rain_code)]
+        #
+        #         # E?er tarih rain_df'te varsa, tüm özellikleri al ve monthly_df'ye ekle
+        #         if date in rain_df.index:
+        #             for feature in rain_df.columns:
+        #                 value = rain_df.loc[date, feature]
+        #                 monthly_df.loc[str(hzbnr_code), f'Rain_{i + 1}_{feature}'] = value
+        #         else:
+        #             print(f"Tarih {date}, rain code {rain_code} için bulunamad?.")
+        #     else:
+        #         print(f"Rain code {rain_code} filled_rain_dict'te bulunamad?.")
 
-# ?ndeks ve de?erleri kontrol ediyoruz
-print(new_df_expanded)
+        # Sediment
+        for i, sediment_code in enumerate(row['nearest_sediment']):
+            if str(sediment_code) in filled_sediment_dict:
+                # ilgili rain_dict dataframe'ini al
+                sediment_df = sediment_code[str(sediment_code)]
+
+                # E?er tarih rain_df'te varsa, tüm özellikleri al ve monthly_df'ye ekle
+                if date in sediment_df.index:
+                    for feature in sediment_code.columns:
+                        value = sediment_code.loc[date, feature]
+                        monthly_df.loc[str(hzbnr_code), f'Sediment_{i + 1}_{feature}'] = value
+                else:
+                    print(f"Tarih {date}, sediment code {sediment_code} için bulunamad?.")
+            else:
+                print(f"Sediment code {sediment_code} filled_sediment_dict'te bulunamad?.")
+
+        # 3. Snow verisi eklenir (Tüm feature'lar? ekleyin)
+        for snow_code in row['nearest_snow']:
+            if snow_code in filled_snow_dict:
+                for feature in filled_snow_dict[snow_code].columns:
+                    value = filled_snow_dict[snow_code].loc[date, feature]
+                    monthly_df.loc[hzbnr_code, f'{feature}_Snow_{snow_code}'] = value
+
+        # Di?er verileri de ayn? ?ekilde ekleyin (örne?in, nearest_source_fr, nearest_conductivity, vb.)
+
+    # Sonuçlar? sözlü?e ekleyin
+    monthly_dfs[f'{date.year}-{date.month}'] = monthly_df
+
+# Sözlükte her bir ay için DataFrame'ler mevcut olacak
+
+
+
 
 ########################################################################################################################
 # Normalization
