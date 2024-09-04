@@ -421,94 +421,90 @@ for dictionary in filled_dict_list:
     filename = os.path.join(directory, f'final_{dict_name}.pkl')
     save_to_pickle(dictionary, filename)
 
-# finalleri pickle'dan ç?karma
 # Calling pickle files back from the directory
 pkl_files = [f for f in os.listdir(directory) if f.endswith('.pkl')]
 
 for pkl_file in pkl_files:
     file_path = os.path.join(directory, pkl_file)
     with open(file_path, 'rb') as file:
-        var_name = pkl_file[:-4]
+        var_name = pkl_file[6:-4]
         globals()[var_name] = pickle.load(file)
-
 
 ########################################################################################################################
 # LSTM-formatted dataframes and the .pkl file
 ########################################################################################################################
 # 732 dataframe
-# Tarih aral???n? belirleyin
-date_range = pd.date_range(start='1960-01-01', end='2021-12-01', freq='MS')
 
-# Sonuçlar? saklamak için bir sözlük olu?turun
-monthly_dfs = {}
+def add_features_to_df(row, date, feature_type, feature_dict, monthly_df):
+    """
+    Bu fonksiyon, belirli bir veri türü için özellikleri monthly_df'ye ekler.
 
-# Her ay için i?lem yap?n
-for date in date_range:
-    # Her ay için bo? bir DataFrame olu?turun
-    monthly_df = pd.DataFrame(index=data['hzbnr01'])
+    Args:
+    row (Series): Veri sat?r?.
+    date (Timestamp): Üzerinde çal???lan tarih.
+    feature_type (str): Özellik türü ('Rain', 'Sediment' vb.).
+    feature_dict (dict): ?lgili özellik verisini içeren sözlük.
+    monthly_df (DataFrame): Sonuçlar? ekleyece?iniz DataFrame.
+    """
+    # temp_df'yi her ça?r?da s?f?rlay?n
+    temp_df = pd.DataFrame(index=monthly_df.index)
 
-    # DataFrame'in index'i, ilgili y?l-ay olacak ?ekilde ayarlanacak
-    monthly_df.index.name = f'{date.year}-{date.month}'
+    if feature_type == 'Groundwater':
+        a = [row['hzbnr01']]
+    else:
+        a = row[f'nearest_{feature_type.lower()}']
 
-    # Her bir sat?r için i?lem yap?n
-    for i, row in data.iterrows():
-        hzbnr_code = row['hzbnr01']
+    for i, code in enumerate(a):
+        if str(code) in feature_dict:
+            feature_df = feature_dict[str(code)]
 
-        # # 1. Groundwater Level verisi eklenir (Tüm feature'lar? ekleyin)
-        # for gw_code in row['nearest_gw_temp']:
-        #     if gw_code in filled_gw_temp_dict:
-        #         for feature in filled_gw_temp_dict[gw_code].columns:
-        #             value = filled_gw_temp_dict[gw_code].loc[date, feature]
-        #             monthly_df.loc[str(hzbnr_code), f'{feature}_GW_{gw_code}'] = value
+            if date in feature_df.index:
+                for feature in feature_df.columns:
+                    # Burada her feature'? do?ru ?ekilde isimlendiriyoruz
+                    column_name = f'{feature_type}_{i + 1}_{feature}'
+                    temp_df[column_name] = np.nan  # Geçici olarak sütunlar? ekle
 
-        # 2. Rain verisi eklenir (Tüm feature'lar? ekleyin)
-        #Her bir rain_code için
-        for i, rain_code in enumerate(row['nearest_rain']):
-            if str(rain_code) in filled_rain_dict:
-                # ilgili rain_dict dataframe'ini al
-                rain_df = filled_rain_dict[str(rain_code)]
-
-                # E?er tarih rain_df'te varsa, tüm özellikleri al ve monthly_df'ye ekle
-                if date in rain_df.index:
-                    for feature in rain_df.columns:
-                        value = rain_df.loc[date, feature]
-                        monthly_df.loc[str(hzbnr_code), f'Rain_{i + 1}_{feature}'] = value
-                else:
-                    print(f"Tarih {date}, rain code {rain_code} için bulunamad?.")
+                    temp_df.loc[str(row['hzbnr01']), column_name] = feature_df.loc[date, feature]
             else:
-                print(f"Rain code {rain_code} filled_rain_dict'te bulunamad?.")
+                print(f"Tarih {date}, {feature_type} code {code} için bulunamad?.")
+        else:
+            print(f"{feature_type} code {code} {feature_type.lower()}_dict'te bulunamad?.")
 
-        # Sediment
-        # for i, owf_lvl_code in enumerate(row['nearest_owf_level']):
-        #     if str(owf_lvl_code) in filled_surface_water_lvl_dict:
-        #         # ilgili rain_dict dataframe'ini al
-        #         owf_lvl_df = owf_lvl_code[str(owf_lvl_code)]
-        #
-        #         # E?er tarih rain_df'te varsa, tüm özellikleri al ve monthly_df'ye ekle
-        #         if date in owf_lvl_df.index:
-        #             for feature in owf_lvl_code.columns:
-        #                 value = owf_lvl_code.loc[date, feature]
-        #                 monthly_df.loc[str(hzbnr_code), f'Sediment_{i + 1}_{feature}'] = value
-        #         else:
-        #             print(f"Tarih {date}, sediment code {owf_lvl_code} için bulunamad?.")
-        #     else:
-        #         print(f"Sediment code {owf_lvl_df} filled_sediment_dict'te bulunamad?.")
+    # temp_df'yi monthly_df'ye ekle
+    monthly_df = pd.concat([monthly_df, temp_df], axis=1)
 
-        # # 3. Snow verisi eklenir (Tüm feature'lar? ekleyin)
-        # for snow_code in row['nearest_snow']:
-        #     if snow_code in filled_snow_dict:
-        #         for feature in filled_snow_dict[snow_code].columns:
-        #             value = filled_snow_dict[snow_code].loc[date, feature]
-        #             monthly_df.loc[hzbnr_code, f'{feature}_Snow_{snow_code}'] = value
+    return monthly_df
 
-        # Di?er verileri de ayn? ?ekilde ekleyin (örne?in, nearest_source_fr, nearest_conductivity, vb.)
+def get_first_n_items(dictionary, n=2):
+    # Convert the dictionary items to a list and slice the first n items
+    first_n_items = list(dictionary.items())[:n]
+    return dict(first_n_items)
+
+date_range = pd.date_range(start='1960-01-01', end='2021-12-01', freq='MS')
+monthly_dfs = {}
+for date in date_range:
+    monthly_df = pd.DataFrame(index=data['hzbnr01'].astype(str))
+    monthly_df.index.name = 'hzbnr01'
+
+    for i, row in data.iterrows():
+        monthly_df = add_features_to_df(row, date, 'Groundwater', filled_filtered_groundwater_dict, monthly_df)
+        monthly_df = add_features_to_df(row, date, 'Gw_temp', filled_gw_temp_dict, monthly_df)
+        monthly_df = add_features_to_df(row, date, 'Rain', filled_rain_dict, monthly_df)
+        monthly_df = add_features_to_df(row, date, 'Snow', filled_snow_dict, monthly_df)
+        monthly_df = add_features_to_df(row, date, 'Source_fr', filled_source_fr_dict, monthly_df)
+        monthly_df = add_features_to_df(row, date, 'Conductivity', filled_conduct_dict, monthly_df)
+        monthly_df = add_features_to_df(row, date, 'Source_temp', filled_source_temp_dict, monthly_df)
+        monthly_df = add_features_to_df(row, date, 'Owf_level', filled_surface_water_lvl_dict, monthly_df)
+        monthly_df = add_features_to_df(row, date, 'Owf_temp', filled_surface_water_temp_dict, monthly_df)
+        monthly_df = add_features_to_df(row, date, 'Owf_fr', filled_surface_water_fr_dict, monthly_df)
+        monthly_df = add_features_to_df(row, date, 'Sediment', filled_sediment_dict, monthly_df)
+
 
     # Sonuçlar? sözlü?e ekleyin
     monthly_dfs[f'{date.year}-{date.month}'] = monthly_df
 
-# Sözlükte her bir ay için DataFrame'ler mevcut olacak
-###########################################################gizmo
-
+# çal??t?rmay? dene !!
+save_to_pickle(monthly_dfs, "monthly_dfs.pkl")
 
 
 ########################################################################################################################
@@ -517,7 +513,10 @@ for date in date_range:
 scaler = MinMaxScaler(feature_range=(0, 1))
 normalized_dfs = [pd.DataFrame(scaler.fit_transform(df), columns=df.columns) for df in list_of_dfs]
 
-# todo son bir datatype'? kontrol edelim
+# todo son bir defa daha datatype'i kontrol edelim
+for key, value in monthly_dfs.items():
+    print(value.dtypes)
+
 ########################################################################################################################
 # LSTM Model
 ########################################################################################################################
