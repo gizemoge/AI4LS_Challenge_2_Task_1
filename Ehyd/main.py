@@ -362,22 +362,6 @@ filled_dict_list = [filled_gw_temp_dict, filled_filtered_groundwater_dict, fille
                     filled_conduct_dict, filled_source_fr_dict, filled_source_temp_dict, filled_surface_water_lvl_dict,
                     filled_surface_water_fr_dict, filled_surface_water_temp_dict, filled_sediment_dict]
 
-# otokorelasyon
-# from pandas.plotting import autocorrelation_plot
-#
-# # Zaman serisi için auto-correlation grafi?i olu?turma
-#
-# plt.figure(figsize=(10, 6))
-# autocorrelation_plot(filled_filtered_groundwater_dict["300111"]["Values"])
-# plt.show()
-#
-# from statsmodels.graphics.tsaplots import plot_acf
-# plot_acf(filled_filtered_groundwater_dict["300111"]["Values"], lags=50)
-# plt.title('Autocorrelation - ?lk 50 Lag')
-# plt.xlabel('Lag')
-# plt.ylabel('Autocorrelation')
-# plt.show()
-
 def add_lag_and_rolling_mean(df, window=6):
     """
     Adds lagged and rolling mean columns to a DataFrame.
@@ -427,138 +411,215 @@ pkl_files = [f for f in os.listdir(directory) if f.endswith('.pkl')]
 for pkl_file in pkl_files:
     file_path = os.path.join(directory, pkl_file)
     with open(file_path, 'rb') as file:
-        var_name = pkl_file[6:-4]
+        var_name = pkl_file[:-4]
         globals()[var_name] = pickle.load(file)
 
 ########################################################################################################################
 # LSTM-formatted dataframes and the .pkl file
 ########################################################################################################################
-# 732 dataframe
+data['hzbnr01'] = data['hzbnr01'].apply(lambda x: [x])
 
-def add_features_to_df(row, date, feature_type, feature_dict, monthly_df):
-    """
-    Bu fonksiyon, belirli bir veri türü için özellikleri monthly_df'ye ekler.
+#### 487
+data_sources = {
+    'nearest_gw_temp': ('gw_temp', filled_gw_temp_dict),
+    'nearest_rain': ('rain', filled_rain_dict),
+    'nearest_snow': ('snow', filled_snow_dict),
+    'nearest_conductivity': ('conduct', filled_conduct_dict),
+    'nearest_source_fr': ('source_fr', filled_source_fr_dict),
+    'nearest_source_temp': ('source_temp', filled_source_temp_dict),
+    'nearest_owf_level': ('owf_level', filled_surface_water_lvl_dict),
+    'nearest_owf_temp': ('owf_temp', filled_surface_water_temp_dict),
+    'nearest_owf_fr': ('owf_fr', filled_surface_water_fr_dict),
+    'nearest_sediment': ('sediment', filled_sediment_dict)
+}
+new_dataframes = {}
+# Her bir station için döngü
+for idx, row in data.iterrows():
+    # Kodlari liste içerisinden ç?kar
+    code = str(row['hzbnr01'][0])
 
-    Args:
-    row (Series): Veri sat?r?.
-    date (Timestamp): Üzerinde çal???lan tarih.
-    feature_type (str): Özellik türü ('Rain', 'Sediment' vb.).
-    feature_dict (dict): ?lgili özellik verisini içeren sözlük.
-    monthly_df (DataFrame): Sonuçlar? ekleyece?iniz DataFrame.
-    """
-    # temp_df'yi her ça?r?da s?f?rlay?n
-    temp_df = pd.DataFrame(index=monthly_df.index)
+    # Sözlükten DataFrame'i al
+    if code in filled_filtered_groundwater_dict:
+        # Yeni DataFrame olu?tur
+        df = filled_filtered_groundwater_dict[code].copy()
 
-    if feature_type == 'Groundwater':
-        a = [row['hzbnr01']]
-    else:
-        a = row[f'nearest_{feature_type.lower()}']
+        for key, (prefix, source_dict) in data_sources.items():
+            for i, code_value in enumerate(row[key]):
+                code_str = str(code_value)
+                source_df = source_dict.get(code_str, pd.DataFrame())
+                # Yeni sütunlar? ekle
+                source_df = source_df.rename(columns=lambda x: f'{prefix}_{i + 1}_{x}')
+                df = df.join(source_df, how='left')
 
-    for i, code in enumerate(a):
-        if str(code) in feature_dict:
-            feature_df = feature_dict[str(code)]
+                columns = ["Values", "lag_1", "lag_2", "lag_3", "rolling_mean_original", "rolling_mean_6_lag_1", "rolling_mean_6_lag_2", "rolling_mean_6_lag_3"]
+                for column in columns:
+                    if i == 2:
+                        df[f"{prefix}_{column}_mean"] = (df[f"{prefix}_{i + 1}_{column}"] + df[f"{prefix}_{i}_{column}"] + df[f"{prefix}_{i - 1}_{column}"]) / 3
 
-            if date in feature_df.index:
-                for feature in feature_df.columns:
-                    # Burada her feature'? do?ru ?ekilde isimlendiriyoruz
-                    column_name = f'{feature_type}_{i + 1}_{feature}'
-                    temp_df[column_name] = np.nan  # Geçici olarak sütunlar? ekle
+        # Sonuçlar? sözlü?e ekle
+        new_dataframes[code] = df
 
-                    temp_df.loc[str(row['hzbnr01']), column_name] = feature_df.loc[date, feature]
-            else:
-                print(f"Tarih {date}, {feature_type} code {code} için bulunamad?.")
-        else:
-            print(f"{feature_type} code {code} {feature_type.lower()}_dict'te bulunamad?.")
+# 744
+monthly_dataframes = {}
+# Her y?l ve ay için döngü
+for year in range(1960, 2022):  # örnek olarak 1960'dan 2024'e kadar
+    for month in range(1, 13):  # 1'den 12'ye kadar
+        # Y?l ve ay bilgisi ile olu?turulan anahtar
+        key = f"{year}_{month:02d}"
 
-    # temp_df'yi monthly_df'ye ekle
-    monthly_df = pd.concat([monthly_df, temp_df], axis=1)
+        # Bo? bir liste olu?turup o y?l ve ay için verileri toplamak
+        monthly_data = []
 
-    return monthly_df
+        for df_id, df in new_dataframes.items():
+            # ?ndex'teki tarih bilgisi
+            mask = (df.index.to_period("M").year == year) & (df.index.to_period("M").month == month)
 
-def get_first_n_items(dictionary, n=2):
-    # Convert the dictionary items to a list and slice the first n items
-    first_n_items = list(dictionary.items())[:n]
-    return dict(first_n_items)
+            if mask.any():
+                # ?lgili ay için filtrelenmi? veri
+                filtered_df = df[mask]
 
-date_range = pd.date_range(start='1960-01-01', end='2021-12-01', freq='MS')
-monthly_dfs = {}
-for date in date_range:
-    monthly_df = pd.DataFrame(index=data['hzbnr01'].astype(str))
-    monthly_df.index.name = 'hzbnr01'
+                # ?ndeksleri güncelle
+                new_index = [f"{df_id}" for i in range(len(filtered_df))]
+                filtered_df.index = new_index
 
-    for i, row in data.iterrows():
-        monthly_df = add_features_to_df(row, date, 'Groundwater', filled_filtered_groundwater_dict, monthly_df)
-        monthly_df = add_features_to_df(row, date, 'Gw_temp', filled_gw_temp_dict, monthly_df)
-        monthly_df = add_features_to_df(row, date, 'Rain', filled_rain_dict, monthly_df)
-        monthly_df = add_features_to_df(row, date, 'Snow', filled_snow_dict, monthly_df)
-        monthly_df = add_features_to_df(row, date, 'Source_fr', filled_source_fr_dict, monthly_df)
-        monthly_df = add_features_to_df(row, date, 'Conductivity', filled_conduct_dict, monthly_df)
-        monthly_df = add_features_to_df(row, date, 'Source_temp', filled_source_temp_dict, monthly_df)
-        monthly_df = add_features_to_df(row, date, 'Owf_level', filled_surface_water_lvl_dict, monthly_df)
-        monthly_df = add_features_to_df(row, date, 'Owf_temp', filled_surface_water_temp_dict, monthly_df)
-        monthly_df = add_features_to_df(row, date, 'Owf_fr', filled_surface_water_fr_dict, monthly_df)
-        monthly_df = add_features_to_df(row, date, 'Sediment', filled_sediment_dict, monthly_df)
+                monthly_data.append(filtered_df)
+
+        # E?er bu y?l ve ay için veri varsa, bunlar? birle?tir ve yeni DataFrame olu?tur
+        if monthly_data:
+            # Her bir DataFrame'in ayn? sütun ve indekslere sahip oldu?unu varsayarak birle?tirme
+            combined_df = pd.concat(monthly_data)
+
+            # Sonuçlar? saklama
+            monthly_dataframes[key] = combined_df
 
 
-    # Sonuçlar? sözlü?e ekleyin
-    monthly_dfs[f'{date.year}-{date.month}'] = monthly_df
-
-# çal??t?rmay? dene !!
-save_to_pickle(monthly_dfs, "monthly_dfs.pkl")
-
+file_path = os.path.join("Ehyd", "pkl_files", 'monthly_dataframes.pkl')
+save_to_pickle(data, file_path)
 
 ########################################################################################################################
 # Normalization
 ########################################################################################################################
 scaler = MinMaxScaler(feature_range=(0, 1))
-normalized_dfs = [pd.DataFrame(scaler.fit_transform(df), columns=df.columns) for df in list_of_dfs]
+normalized_monthly_dfs_list = [pd.DataFrame(scaler.fit_transform(df), index=df.index, columns=df.columns)
+                          for month, df in monthly_dataframes.items()]
 
-# todo son bir defa daha datatype'i kontrol edelim
-for key, value in monthly_dfs.items():
-    print(value.dtypes)
+
+# Normalize edilmi? DataFrame'leri tutmak için bir sözlük olu?turun
+normalized_monthly_dataframes = {}
+
+# Her bir ay için normalizasyonu gerçekle?tirin
+for key, df in monthly_dataframes.items():
+    # MinMaxScaler'? kullanarak normalize edin
+    normalized_array = scaler.fit_transform(df)
+    # Normalized array'i tekrar DataFrame'e dönü?türün
+    normalized_df = pd.DataFrame(normalized_array, index=df.index, columns=df.columns)
+    # Sonuçlar? normalized_monthly_dataframes sözlü?üne kaydedin
+    normalized_monthly_dataframes[key] = normalized_df
+
+# Sonuçlar? görmek için bir örnek:
+print(normalized_monthly_dataframes['1960-1'].head())
+
+
+
+zero_counts = (monthly_dataframes["1960_01"] == 0).sum().sum()
+value_count = (monthly_dataframes["1960_01"].shape[0] * monthly_dataframes["1960_01"].shape[1])
+zero_ratio = zero_counts / value_count
+
+
+value_count = (monthly_dataframes["1960_01"].shape[0] * monthly_dataframes["1960_01"].shape[1]) # 89608
+
+for key, df in monthly_dataframes.items():
+    zero_counts = (df == 0).sum().sum()
+    zero_ratio = zero_counts / value_count
+
+
 
 ########################################################################################################################
 # LSTM Model
 ########################################################################################################################
-# 1. Veri Haz?rl???
-
 # DataFrame'leri numpy array'lerine dönü?türüp birle?tirin
-data = np.array([df.values for df in list_of_dfs])  # (720, 487, 57)
+array = np.array([df.values for df in normalized_monthly_dfs_list])  # (744, 487, 57)
 
-# 2. Pencereleme
-def create_windows(data, window_size, forecast_horizon):
+
+
+######################################################################################################################3
+
+# Normalizasyon ve lstm eda chatcpt:
+
+
+
+# MinMaxScaler tan?mla
+scaler = MinMaxScaler(feature_range=(0, 1))
+
+# Normalle?tirilmi? verileri saklamak için yeni bir sözlük olu?tur
+normalized_monthly_dataframes = {}
+
+for month, df in monthly_dataframes.items():
+    # Verileri MinMaxScaler ile normalize et
+    scaled_df = pd.DataFrame(scaler.fit_transform(df), index=df.index, columns=df.columns)
+    normalized_monthly_dataframes[month] = scaled_df
+
+
+def create_lstm_input_from_dict(monthly_dataframes, target_column, lookback):
     X, y = [], []
-    num_time_steps = data.shape[0]
+    months = sorted(monthly_dataframes.keys())
 
-    for start in range(num_time_steps - window_size - forecast_horizon + 1):
-        end = start + window_size
-        X.append(data[start:end, :, :])
-        y.append(data[end:end + forecast_horizon, :, :])
+    for i in range(lookback, len(months)):
+        past_data = [monthly_dataframes[months[j]].values for j in range(i - lookback, i)]
+        X.append(np.concatenate(past_data, axis=0))
+        y.append(monthly_dataframes[months[i]][target_column].values)
 
-    X = np.array(X)
-    y = np.array(y)
-
-    # X'in boyutlar?n? (batch_size, time_steps, features) haline getir
-    X = X.reshape(X.shape[0], X.shape[1], -1)
-    y = y.reshape(y.shape[0], y.shape[1], -1)
-
-    return X, y
+    return np.array(X), np.array(y)
 
 
-window_size = 12 # window size'? hala tam olarak anlayamad?m
-forecast_horizon = 26 # önümüzdeli 26 ay? tahmin edece?iz
-X, y = create_windows(data, window_size, forecast_horizon)  # X: (672, 12, 487, 5), y: (672, 26, 487, 5)
+lookback = 12  # Son 12 ayl?k veriyi kullanarak tahmin yap
+X, y = create_lstm_input_from_dict(normalized_monthly_dataframes, 'Values', lookback)
 
-# 3. E?itim ve Test Setlerine Bölme
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
+print("X shape:", X.shape)
+print("y shape:", y.shape)
 
-# 4. LSTM Modelini Olu?turma ve E?itim
-model = Sequential()
-model.add(LSTM(units=57, return_sequences=True, input_shape=(window_size, data.shape[1] * data.shape[2])))
-model.add(LSTM(units=57, return_sequences=True))
-model.add(Dense(data.shape[2]))  # Ç?k?? katman?, tahmin edilmesi gereken sütun say?s?na göre ayarlanmal?
-model.compile(optimizer='adam', loss='mse')
 
-# Modeli e?itme
-history = model.fit(X_train, y_train, epochs=50, batch_size=32, validation_data=(X_test, y_test))
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense
+
+lookback = 12  # Son 12 ayl?k veriyi kullanarak tahmin yap
+future_steps = 24  # 24 ayl?k tahmin
+
+station_predictions = {}
+
+for station in range(y.shape[1]):  # Her istasyon için
+    # Modeli tan?mla
+    model = Sequential()
+    model.add(LSTM(units=50, return_sequences=True, input_shape=(X.shape[1], X.shape[2])))
+    model.add(LSTM(units=50, return_sequences=False))
+    model.add(Dense(units=25))
+    model.add(Dense(units=1))
+
+    # Modeli derle
+    model.compile(optimizer='adam', loss='mean_squared_error')
+
+    # Modeli e?it
+    model.fit(X, y[:, station], epochs=20, batch_size=32, verbose=0)
+
+    # Son sequence ile ba?la
+    current_sequence = X[-1].reshape(1, X.shape[1], X.shape[2])
+
+    station_future_predictions = []
+
+    # 24 ayl?k tahmin yap
+    for step in range(future_steps):
+        prediction = model.predict(current_sequence)
+        station_future_predictions.append(prediction[0, 0])
+
+        # Yeni tahmin edilen de?eri sequence'e ekle
+        next_input = np.append(current_sequence[:, 1:, :], [[prediction]], axis=1)
+
+    station_predictions[f"Station_{station}"] = station_future_predictions
+    print(f"Station {station} için tahminler: {station_future_predictions}")
+
+
+for station, preds in station_predictions.items():
+    print(f"{station} için 24 ayl?k tahminler: {preds}")
+
+
 

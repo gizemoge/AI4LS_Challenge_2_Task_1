@@ -1,4 +1,16 @@
 
+gw
+gw_temp 1
+rain 3
+snow 3
+source_fr 1
+conduct 1
+source_temp 1
+owf_level 3
+owf_temp 1
+owf_fr 3
+sediment 1
+
 ########################################################################################################################
 # Yer alt? su seviyesi – 3792 *
 # Yer alt? s?cakl?k – 1562 *
@@ -1168,3 +1180,20 @@ for month in range(720):
 
     # Listeye ekliyoruz
     list_of_dfs.append(new_df)
+
+
+# otokorelasyon
+# from pandas.plotting import autocorrelation_plot
+#
+# # Zaman serisi için auto-correlation grafi?i olu?turma
+#
+# plt.figure(figsize=(10, 6))
+# autocorrelation_plot(filled_filtered_groundwater_dict["300111"]["Values"])
+# plt.show()
+#
+# from statsmodels.graphics.tsaplots import plot_acf
+# plot_acf(filled_filtered_groundwater_dict["300111"]["Values"], lags=50)
+# plt.title('Autocorrelation - ?lk 50 Lag')
+# plt.xlabel('Lag')
+# plt.ylabel('Autocorrelation')
+# plt.show()
