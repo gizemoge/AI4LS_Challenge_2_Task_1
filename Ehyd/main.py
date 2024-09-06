@@ -170,7 +170,7 @@ def process_dataframes(df_dict):
 
     return df_dict
 
-def process_and_store_data(folder, coordinates, prefix, points_list=None):
+def process_and_store_data(folder, coordinates, prefix, station_list=None):
     data_dict, data_coordinates = to_dataframe(folder, coordinates)
     data_dict = process_dataframes(data_dict)
 
@@ -179,24 +179,24 @@ def process_and_store_data(folder, coordinates, prefix, points_list=None):
 
     to_global(data_dict, prefix=prefix)
 
-    if points_list:
-        data_dict = filter_dataframes_by_points(data_dict, points_list)
-        data_coordinates = data_coordinates[data_coordinates['hzbnr01'].astype(str).isin(points_list)]
+    if station_list:
+        data_dict = filter_dataframes_by_stations(data_dict, station_list)
+        data_coordinates = data_coordinates[data_coordinates['hzbnr01'].astype(str).isin(station_list)]
 
     return data_dict, data_coordinates
 
-def filter_dataframes_by_points(dataframes_dict, points_list):
+def filter_dataframes_by_stations(dataframes_dict, station_list):
     """
     Filters a dictionary of DataFrames to include only those whose names are specified in a given CSV file.
 
     Args:
         dataframes_dict (dict): A dictionary where keys are names (str) and values are DataFrames.
-        points_list (str): Path to a CSV file that contains the names (str) of the DataFrames to filter.
+        station_list (str): Path to a CSV file that contains the names (str) of the DataFrames to filter.
 
     Returns:
         dict: A filtered dictionary containing only the DataFrames whose names are listed in the CSV file.
     """
-    filtered_dict = {name: df for name, df in dataframes_dict.items() if name in points_list}
+    filtered_dict = {name: df for name, df in dataframes_dict.items() if name in station_list}
     return filtered_dict
 
 def save_to_pickle(item, filename):
@@ -237,12 +237,12 @@ surface_water_folders = [
     ("Schwebstoff-Tagesfracht", "sediment_"),
     ("Q-Tagesmittel", "surface_water_fr_")]
 
-# Groundwater Dictionary (Filtered to requested 487 points)
-points = pd.read_csv(os.path.join("Ehyd", "datasets_ehyd", "gw_test_empty.csv"))
-points_list = [col for col in points.columns[1:]]
+# Groundwater Dictionary (Filtered to the requested 487 stations)
+stations = pd.read_csv(os.path.join("Ehyd", "datasets_ehyd", "gw_test_empty.csv"))
+station_list = [col for col in stations.columns[1:]]
 filtered_groundwater_dict, filtered_gw_coordinates = process_and_store_data(
     os.path.join("Ehyd", "datasets_ehyd", "Groundwater", "Grundwasserstand-Monatsmittel"),
-    groundwater_all_coordinates, "gw_", points_list)
+    groundwater_all_coordinates, "gw_", station_list)
 
 gw_temp_dict, gw_temp_coordinates = process_and_store_data(os.path.join("Ehyd", "datasets_ehyd", "Groundwater", "Grundwassertemperatur-Monatsmittel"), groundwater_all_coordinates, "gwt_")
 rain_dict, rain_coord = process_and_store_data(os.path.join("Ehyd", "datasets_ehyd", "Precipitation", precipitation_folders[0][0]), precipitation_coordinates, "rain_")
@@ -276,7 +276,7 @@ def add_nearest_coordinates_column(df_to_add, name, k, df_to_merge=None):
         df_to_merge = data  # Use the current value of 'data' as the default
     results = []
 
-    # Find the nearest points according to the coordinates
+    # Find the nearest stations according to the coordinates
     for _, gw_row in filtered_gw_coordinates.iterrows():
         nearest = find_nearest_coordinates(gw_row, df_to_add, k)
         nearest_list = nearest['hzbnr01'].tolist()
@@ -316,8 +316,7 @@ data = add_nearest_coordinates_column(sediment_coord, 'nearest_sediment', 1, df_
 data = add_nearest_coordinates_column(surface_water_fr_coord, 'nearest_owf_fr', 3, df_to_merge=data)
 data.drop(["x", "y"], axis=1, inplace=True)
 
-directory = 'Ehyd/pkl_files'
-file_path = os.path.join(directory, 'data.pkl')
+file_path = os.path.join('Ehyd', 'pkl_files', 'data.pkl')
 save_to_pickle(data, file_path)
 
 ########################################################################################################################
