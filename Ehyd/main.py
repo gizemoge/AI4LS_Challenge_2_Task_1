@@ -1,10 +1,16 @@
 # IMPORTS
+import tensorflow as tf
+
+# inter_op ve intra_op paralellik ayarlar?
+tf.config.threading.set_inter_op_parallelism_threads(4)  # Örne?in, 4 i? parçac??? kullan
+tf.config.threading.set_intra_op_parallelism_threads(2)  # ??lem ba??na 2 i? parçac??? kullan
 import os
 import warnings
 from statsmodels.tools.sm_exceptions import ConvergenceWarning
 from sklearn.model_selection import train_test_split
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense
+from tensorflow.keras.layers import LSTM, Dense, Dropout
+from keras.callbacks import EarlyStopping
 from datetime import datetime
 from scipy.spatial import distance
 from collections import Counter
@@ -25,6 +31,7 @@ pd.set_option('display.float_format', lambda x: '%.3f' % x)
 pd.set_option('display.max_colwidth', None)
 pd.set_option('display.width', 500)
 warnings.simplefilter('ignore', category=ConvergenceWarning)
+
 
 # FUNCTIONS
 def station_coordinates(input):
@@ -401,7 +408,7 @@ directory = 'Ehyd/pkl_files'
 
 for dictionary in filled_dict_list:
     dict_name = [name for name in globals() if globals()[name] is dictionary][0]
-    filename = os.path.join(directory, f'final_{dict_name}.pkl')
+    filename = os.path.join(directory, f'{dict_name}.pkl')
     save_to_pickle(dictionary, filename)
 
 # Calling pickle files back from the directory
@@ -493,132 +500,474 @@ for year in range(1960, 2022):  # örnek olarak 1960'dan 2024'e kadar
 
 
 file_path = os.path.join("Ehyd", "pkl_files", 'monthly_dataframes.pkl')
-save_to_pickle(data, file_path)
+save_to_pickle(monthly_dataframes, file_path)
 
+"""
 ########################################################################################################################
 # Normalization
 ########################################################################################################################
 scaler = MinMaxScaler(feature_range=(0, 1))
-normalized_monthly_dfs_list = [pd.DataFrame(scaler.fit_transform(df), index=df.index, columns=df.columns)
-                          for month, df in monthly_dataframes.items()]
 
+# normalized_monthly_dfs_list = [pd.DataFrame(scaler.fit_transform(df), index=df.index, columns=df.columns) for month, df in monthly_dataframes.items()]
 
-# Normalize edilmi? DataFrame'leri tutmak için bir sözlük olu?turun
-normalized_monthly_dataframes = {}
-
-# Her bir ay için normalizasyonu gerçekle?tirin
-for key, df in monthly_dataframes.items():
-    # MinMaxScaler'? kullanarak normalize edin
-    normalized_array = scaler.fit_transform(df)
-    # Normalized array'i tekrar DataFrame'e dönü?türün
-    normalized_df = pd.DataFrame(normalized_array, index=df.index, columns=df.columns)
-    # Sonuçlar? normalized_monthly_dataframes sözlü?üne kaydedin
-    normalized_monthly_dataframes[key] = normalized_df
-
-# Sonuçlar? görmek için bir örnek:
-print(normalized_monthly_dataframes['1960-1'].head())
+normalized_dataframes = {}
+for month, df in monthly_dataframes.items():
+    normalized_df = pd.DataFrame(scaler.fit_transform(df), index=df.index, columns=df.columns)
+    normalized_dataframes[month] = normalized_df
 
 
 
-zero_counts = (monthly_dataframes["1960_01"] == 0).sum().sum()
-value_count = (monthly_dataframes["1960_01"].shape[0] * monthly_dataframes["1960_01"].shape[1])
-zero_ratio = zero_counts / value_count
+for key, value in normalized_dataframes.items():
+    print(value.tail())
 
 
-value_count = (monthly_dataframes["1960_01"].shape[0] * monthly_dataframes["1960_01"].shape[1]) # 89608
+# zero-padding kontrolü ve dataframe ay?klamas?
+monthly_zero_ratio_dict = {}
+value_count = (normalized_dataframes["1960_01"].shape[0] * normalized_dataframes["1960_01"].shape[1]) # 89608
 
-for key, df in monthly_dataframes.items():
+for key, df in normalized_dataframes.items():
     zero_counts = (df == 0).sum().sum()
     zero_ratio = zero_counts / value_count
+    monthly_zero_ratio_dict[key] = zero_ratio
 
+keys = list(monthly_zero_ratio_dict.keys())
+values = list(monthly_zero_ratio_dict.values())
+last_value_above_threshold = next((val for val in reversed(values) if val > 0.5), None) # 0.501
+key_of_last_value_above_threshold = keys[values.index(last_value_above_threshold)] # 1984_11
 
+plt.figure(figsize=(10, 6))
+plt.plot(keys, values)
+plt.xlabel('Date (Year-Month)')
+plt.ylabel('Zero Ratio')
+plt.xticks(rotation=45)
+plt.title('Zero Ratio over the Dataframes')
+plt.tight_layout()
+plt.show()
+
+normalized_dict_85to21 = {k: v for k, v in normalized_dataframes.items() if k >= "1985_01"}
+len(normalized_dict_85to21) # 444
+normalized_dict_85to21["1985_01"].shape # (487, 184)
+
+file_path = os.path.join("Ehyd", "pkl_files", 'normalized_dict_85to21.pkl')
+save_to_pickle(normalized_dict_85to21, file_path)
+
+# Dosyay? aç?n ve içeri?i yükleyin
+with open(file_path, 'rb') as file:
+    normalized_dict_85to21 = pickle.load(file)
+"""
 
 ########################################################################################################################
 # LSTM Model
 ########################################################################################################################
-# DataFrame'leri numpy array'lerine dönü?türüp birle?tirin
-array = np.array([df.values for df in normalized_monthly_dfs_list])  # (744, 487, 57)
+# 7 eylül Cumartesi
+
+with open(os.path.join('Ehyd', 'pkl_files', 'monthly_dataframes.pkl'), 'rb') as file:
+    monthly_dataframes = pickle.load(file)
+
+monthly_dict_85to21 = {k: v for k, v in monthly_dataframes.items() if k >= "1985_01"}
+len(monthly_dict_85to21)
+
+file_path = os.path.join("Ehyd", "pkl_files", 'monthly_dict_85to21.pkl')
+save_to_pickle(monthly_dict_85to21, file_path)
+
+###############################################
+# h?zland?r?c? faktörler deneme:
+##############################################3
+# Dosyay? aç?n ve içeri?i yükleyin
+with open(os.path.join('Ehyd', 'pkl_files', 'monthly_dict_85to21.pkl'), 'rb') as file:
+    monthly_dict_85to21 = pickle.load(file)
+
+
+lookback = 36  # Modelin bakaca?? geçmi? ay say?s?
+test_size = 24  # Tahmin edilecek 24 ay
+batch_size = 256  # Bir seferde i?lenecek veri miktar?
+
+X_train, y_train = [], []
+X_test, y_test = [], []
+
+# Her istasyon verisini e?itim ve test olarak ay?r?yoruz
+for month, df in monthly_dict_85to21.items():
+    values = df.values  # DataFrame'i numpy array'e çeviriyoruz
+
+    # E?itim verisi: lookback ve test_size d???nda kalan veriler
+    num_samples = len(values) - lookback - test_size
+    for start in range(0, num_samples, batch_size):
+        end = min(start + batch_size, num_samples)
+        X_train_batch = np.array([values[i:i + lookback] for i in range(start, end)])
+        y_train_batch = np.array([values[i + lookback:i + lookback + test_size, 0] for i in range(start, end)])
+
+        # X_train ve y_train listesine batch'leri ekleme
+        X_train.append(X_train_batch)
+        y_train.append(y_train_batch)
+
+    # Test verisi: Son 12 ay ve test verisi
+    X_test.append(values[-(lookback + test_size):-test_size])  # Son 12 ayl?k geçmi? veriyi al?yoruz
+    y_test.append(values[-test_size:, 0])  # Sonraki 24 ay?n target verisi
+
+# X_train ve y_train'i numpy array'lere çeviriyoruz (batch'ler halinde)
+X_train = np.concatenate(X_train, axis=0)
+y_train = np.concatenate(y_train, axis=0)
+X_test = np.array(X_test)
+y_test = np.array(y_test)
+
+####
+print(type(X_train))  # This will confirm if it's a list
+print(type(X_train[0]))  # This checks what type the first element is
+print(X_train[:5])  # Print the first 5 elements to understand their structure
+n_samples, n_timesteps, n_features = X_train.shape
+
+import numpy as np
+
+X_train = np.array(X_train)
+print(X_train.shape)  # Ensure the shape is (888, n_features)
+####
+
+# Assuming X_train is a list of 3D arrays (n_timesteps, n_features)
+scaler = MinMaxScaler()
+scaled_X_train = []
+
+# Loop over each 3D array in X_train
+for X in X_train:
+    # Get the shape of the current 3D array (n_samples, n_timesteps, n_features)
+    n_samples, n_timesteps, n_features = X.shape
+    # Reshape the data to 2D: (n_samples * n_timesteps, n_features)
+    X_reshaped = X.reshape(-1, n_features)
+
+    # Fit and transform the data
+    X_scaled = scaler.fit_transform(X_reshaped)
+
+    # Reshape back to the original shape: (n_samples, n_timesteps, n_features)
+    X_scaled = X_scaled.reshape(n_samples, n_timesteps, n_features)
+
+    # Append the scaled array to the new list
+    scaled_X_train.append(X_scaled)
+
+scaled_y_train = []
+for y in y_train:
+    n_samples, n_timesteps, n_features = y.shape
+    # Reshape the data to 2D: (n_samples * n_timesteps, n_features)
+    y_reshaped = y.reshape(-1, n_features)
+
+    # Fit and transform the data
+    y_scaled = scaler.fit_transform(y_reshaped)
+
+    # Reshape back to the original shape: (n_samples, n_timesteps, n_features)
+    y_scaled = y_scaled.reshape(n_samples, n_timesteps, n_features)
+
+    # Append the scaled array to the new list
+    scaled_y_train.append(y_scaled)
 
 
 
-######################################################################################################################3
+###### dilara chatgpt ba?lang?c?
+scaler = MinMaxScaler()
+# Fit on the training data (for example, assuming X_train)
+X_train_scaled = scaler.fit_transform(X_train)
+# Transforming test data using the same scaler
+X_test_scaled = scaler.transform(X_test)
 
-# Normalizasyon ve lstm eda chatcpt:
+# Later, to revert back the scaled data to original scale:
+X_train_original = scaler.inverse_transform(X_train_scaled)
+X_test_original = scaler.inverse_transform(X_test_scaled)
 
-
-
-# MinMaxScaler tan?mla
-scaler = MinMaxScaler(feature_range=(0, 1))
-
-# Normalle?tirilmi? verileri saklamak için yeni bir sözlük olu?tur
-normalized_monthly_dataframes = {}
-
-for month, df in monthly_dataframes.items():
-    # Verileri MinMaxScaler ile normalize et
-    scaled_df = pd.DataFrame(scaler.fit_transform(df), index=df.index, columns=df.columns)
-    normalized_monthly_dataframes[month] = scaled_df
+### biti?
 
 
-def create_lstm_input_from_dict(monthly_dataframes, target_column, lookback):
-    X, y = [], []
-    months = sorted(monthly_dataframes.keys())
-
-    for i in range(lookback, len(months)):
-        past_data = [monthly_dataframes[months[j]].values for j in range(i - lookback, i)]
-        X.append(np.concatenate(past_data, axis=0))
-        y.append(monthly_dataframes[months[i]][target_column].values)
-
-    return np.array(X), np.array(y)
-
-
-lookback = 12  # Son 12 ayl?k veriyi kullanarak tahmin yap
-X, y = create_lstm_input_from_dict(normalized_monthly_dataframes, 'Values', lookback)
-
-print("X shape:", X.shape)
-print("y shape:", y.shape)
-
-
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense
-
-lookback = 12  # Son 12 ayl?k veriyi kullanarak tahmin yap
-future_steps = 24  # 24 ayl?k tahmin
-
-station_predictions = {}
-
-for station in range(y.shape[1]):  # Her istasyon için
-    # Modeli tan?mla
-    model = Sequential()
-    model.add(LSTM(units=50, return_sequences=True, input_shape=(X.shape[1], X.shape[2])))
-    model.add(LSTM(units=50, return_sequences=False))
-    model.add(Dense(units=25))
-    model.add(Dense(units=1))
-
-    # Modeli derle
-    model.compile(optimizer='adam', loss='mean_squared_error')
-
-    # Modeli e?it
-    model.fit(X, y[:, station], epochs=20, batch_size=32, verbose=0)
-
-    # Son sequence ile ba?la
-    current_sequence = X[-1].reshape(1, X.shape[1], X.shape[2])
-
-    station_future_predictions = []
-
-    # 24 ayl?k tahmin yap
-    for step in range(future_steps):
-        prediction = model.predict(current_sequence)
-        station_future_predictions.append(prediction[0, 0])
-
-        # Yeni tahmin edilen de?eri sequence'e ekle
-        next_input = np.append(current_sequence[:, 1:, :], [[prediction]], axis=1)
-
-    station_predictions[f"Station_{station}"] = station_future_predictions
-    print(f"Station {station} için tahminler: {station_future_predictions}")
-
-
-for station, preds in station_predictions.items():
-    print(f"{station} için 24 ayl?k tahminler: {preds}")
+############## gizmo
+# Ayl?k verileri y?l baz?nda ay?rarak
+train_data = {k: v for k, v in monthly_dict_85to21.items() if k < '2020_01'}
+test_data = {k: v for k, v in monthly_dict_85to21.items() if k >= '2020_01'}
 
 
 
+# E?itim setine scaler uygulama
+scaler = MinMaxScaler()
+#scaled_train_data = scaler.fit_transform(train_data)
+# Test setine ayn? scaler'? uygulama
+#scaled_test_data = scaler.transform(test_data)
+
+scaled_train_data = []
+# Loop through each item in the dictionary
+for date, df in train_data.items():
+    # Fit and transform the current data
+    scaled_data = scaler.fit_transform(df)
+    # Store the scaled data back in a new dictionary
+    scaled_train_data.append(df) 
+
+scaled_test_data = []
+for date, df in test_data.items():
+    # Fit and transform the current data
+    scaled_data = scaler.transform(df)
+    # Store the scaled data back in a new dictionary
+    scaled_test_data.append(df)
+
+X_train = scaled_train_data[:400]
+y_train = scaled_train_data[400:]
+
+X_test = scaled_test_data[:44]
+y_test = scaled_test_data[44:]
+
+
+
+scaled_train_data = np.array(scaled_train_data)
+
+
+
+
+
+
+X_train, y_train, X_test, y_test
+
+TRAIN A?AMASI                                   TEST A?AMASI
+x_train (train snow bilmemne 2020te kadar)      x_test (rain snow bilmemne 2020den sonra)
+y_train (gw 2020ye kadar)                       y_test (gw w2020den sonra)
+                                                y_pred
+
+
+num_features = X_train.shape[2]  # Kaç özellik (sütun) var?
+num_units = 30  # LSTM hücre say?s?
+
+model = Sequential()
+model.add(LSTM(num_units, input_shape=(lookback, num_features), return_sequences=True))
+model.add(Dropout(0.2))  # Overfitting'i önlemek için
+model.add(LSTM(num_units, return_sequences=False))
+model.add(Dropout(0.2))
+model.add(Dense(24))  # 24 ayl?k tahmin
+
+model.compile(optimizer='adam', loss='mse')
+
+# Early stopping: Do?rulama kayb? 5 dönem boyunca iyile?mezse e?itim duracak
+early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+
+
+import time
+
+# E?itim süresini ölçelim
+start_time = time.time()
+# Modeli e?itme
+history = model.fit(X_train, y_train, epochs=10, batch_size=64, validation_split=0.1, callbacks=[early_stopping])
+
+end_time = time.time()
+
+print(f"Training took {end_time - start_time} seconds")
+
+# Test verisi üzerinde tahmin yapma
+predictions = model.predict(X_test)
+
+# Tahmin sonuçlar? ve gerçek sonuçlar? inceleme
+print("Tahmin edilen de?erler: ", predictions[0:5])
+print("Gerçek test de?erleri: ", y_test[0:5])
+
+
+
+
+
+
+
+######### eda
+lookback = 36  # Modelin bakaca?? geçmi? ay say?s?
+test_size = 24  # Tahmin edilecek 24 ay
+batch_size = 256  # Bir seferde i?lenecek veri miktar?
+
+X_train, y_train = [], []
+X_test, y_test = [], []
+
+# Her istasyon verisini e?itim ve test olarak ay?r?yoruz
+for month, df in monthly_dict_85to21.items():
+    values = df.values  # DataFrame'i numpy array'e çeviriyoruz
+
+    # E?itim verisi: lookback ve test_size d???nda kalan veriler
+    num_samples = len(values) - lookback - test_size
+    for start in range(0, num_samples, batch_size):
+        end = min(start + batch_size, num_samples)
+        X_train_batch = np.array([values[i:i + lookback] for i in range(start, end)])
+        y_train_batch = np.array([values[i + lookback:i + lookback + test_size, 0] for i in range(start, end)])
+
+        # X_train ve y_train listesine batch'leri ekleme
+        X_train.append(X_train_batch)
+        y_train.append(y_train_batch)
+
+    # Test verisi: Son 36 ay ve test verisi
+    X_test.append(values[-(lookback + test_size):-test_size])  # Son 36 ayl?k geçmi? veriyi al?yoruz
+    y_test.append(values[-test_size:, 0])  # Sonraki 24 ay?n target verisi
+
+# X_train ve y_train'i numpy array'lere çeviriyoruz
+X_train = np.concatenate(X_train, axis=0)
+y_train = np.concatenate(y_train, axis=0)
+X_test = np.array(X_test)
+y_test = np.array(y_test)
+
+# Veriyi normalle?tirme (MinMaxScaler kullanarak)
+scaler = MinMaxScaler()
+
+# X_train verisi için normalle?tirme
+scaled_X_train = []
+
+# Her bir örnek (3D array) için normalizasyon yap?yoruz
+for X in X_train:
+    n_timesteps, n_features = X.shape  # ?u an (lookback, n_features) ?eklinde
+    X_reshaped = X.reshape(-1, n_features)  # Veriyi (timesteps, features) olarak 2D'ye indiriyoruz
+    X_scaled = scaler.fit_transform(X_reshaped)  # Veriyi normalle?tiriyoruz
+    X_scaled = X_scaled.reshape(n_timesteps, n_features)  # Tekrar orijinal boyutuna döndürüyoruz
+    scaled_X_train.append(X_scaled)
+
+# X_test verisi için normalle?tirme
+scaled_X_test = []
+
+for X in X_test:
+    n_timesteps, n_features = X.shape  # ?u an (lookback, n_features) ?eklinde
+    X_reshaped = X.reshape(-1, n_features)  # Veriyi (timesteps, features) olarak 2D'ye indiriyoruz
+    X_scaled = scaler.transform(X_reshaped)  # Test verisine ayn? scaler ile transform yap?yoruz
+    X_scaled = X_scaled.reshape(n_timesteps, n_features)  # Tekrar orijinal boyutuna döndürüyoruz
+    scaled_X_test.append(X_scaled)
+
+# scaled_X_train ve scaled_X_test numpy array'e çevirme
+scaled_X_train = np.array(scaled_X_train)
+scaled_X_test = np.array(scaled_X_test)
+
+# Veriyi modele beslemeye haz?r hale getirdik
+print(f"X_train shape: {scaled_X_train.shape}")
+print(f"y_train shape: {y_train.shape}")
+print(f"X_test shape: {scaled_X_test.shape}")
+print(f"y_test shape: {y_test.shape}")
+#########
+
+
+
+
+
+#######################################################
+# all data normalize
+###########################################################
+
+# Tüm verileri birle?tiriyoruz
+all_data = pd.concat(monthly_dict_85to21.values(), axis=0)
+
+# Tek bir scaler kullanarak normalize ediyoruz
+scaler = MinMaxScaler()
+normalized_all_data = pd.DataFrame(scaler.fit_transform(all_data), index=all_data.index, columns=all_data.columns)
+
+# Normalized edilmi? veriyi her bir aya geri bölüyoruz
+normalized_dataframes_eda = {}
+start_idx = 0
+for month, df in monthly_dict_85to21.items():
+    end_idx = start_idx + len(df)
+    normalized_dataframes_eda[month] = normalized_all_data.iloc[start_idx:end_idx]
+    start_idx = end_idx
+
+
+
+lookback = 36  # Modelin bakaca?? geçmi? ay say?s?
+test_size = 24  # Tahmin edilecek 24 ay
+batch_size = 256  # Bir seferde i?lenecek veri miktar?
+
+X_train, y_train = [], []
+X_test, y_test = [], []
+
+# Her istasyon verisini e?itim ve test olarak ay?r?yoruz
+for month, df in normalized_dataframes_eda.items():
+    values = df.values  # DataFrame'i numpy array'e çeviriyoruz
+
+    # E?itim verisi: lookback ve test_size d???nda kalan veriler
+    num_samples = len(values) - lookback - test_size
+    for start in range(0, num_samples, batch_size):
+        end = min(start + batch_size, num_samples)
+        X_train_batch = np.array([values[i:i + lookback] for i in range(start, end)])
+        y_train_batch = np.array([values[i + lookback:i + lookback + test_size, 0] for i in range(start, end)])
+
+        # X_train ve y_train listesine batch'leri ekleme
+        X_train.append(X_train_batch)
+        y_train.append(y_train_batch)
+
+    # Test verisi: Son 12 ay ve test verisi
+    X_test.append(values[-(lookback + test_size):-test_size])  # Son 12 ayl?k geçmi? veriyi al?yoruz
+    y_test.append(values[-test_size:, 0])  # Sonraki 24 ay?n target verisi
+
+# X_train ve y_train'i numpy array'lere çeviriyoruz (batch'ler halinde)
+X_train = np.concatenate(X_train, axis=0)
+y_train = np.concatenate(y_train, axis=0)
+X_test = np.array(X_test)
+y_test = np.array(y_test)
+
+# E?itim ve test verilerinin ?ekillerini kontrol edelim
+print("X_train shape:", X_train.shape)
+print("y_train shape:", y_train.shape)
+print("X_test shape:", X_test.shape)
+print("y_test shape:", y_test.shape)
+
+
+num_features = X_train.shape[2]  # Kaç özellik (sütun) var?
+num_units = 30  # LSTM hücre say?s?
+
+model = Sequential()
+model.add(LSTM(num_units, input_shape=(lookback, num_features), return_sequences=True))
+model.add(Dropout(0.2))  # Overfitting'i önlemek için
+model.add(LSTM(num_units, return_sequences=False))
+model.add(Dropout(0.2))
+model.add(Dense(24))  # 24 ayl?k tahmin
+
+model.compile(optimizer='adam', loss='mse')
+
+# Early stopping: Do?rulama kayb? 5 dönem boyunca iyile?mezse e?itim duracak
+early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+
+
+import time
+
+# E?itim süresini ölçelim
+start_time = time.time()
+# Modeli e?itme
+history = model.fit(X_train, y_train, epochs=10, batch_size=64, validation_split=0.1, callbacks=[early_stopping])
+
+end_time = time.time()
+
+print(f"Training took {end_time - start_time} seconds")
+
+# Test verisi üzerinde tahmin yapma
+predictions = model.predict(X_test)
+
+# Tahmin sonuçlar? ve gerçek sonuçlar? inceleme
+print("Tahmin edilen de?erler: ", predictions[0:5])
+print("Gerçek test de?erleri: ", y_test[0:5])
+
+# gerçek de?erleri ile görselle?tirme:
+
+y_test_rescaled = []
+predictions_rescaled = []
+
+# Her bir istasyon için geri ölçeklendirme i?lemi
+for i in range(len(X_test)):
+    # Sadece 'Target' sütunu üzerinden geri ölçeklendirme yap?yoruz
+    y_test_with_fake_columns = np.zeros((len(y_test[i]), X_train.shape[2]))
+    y_test_with_fake_columns[:, -1] = y_test[i].reshape(-1)
+
+    predictions_with_fake_columns = np.zeros((len(predictions[i]), X_train.shape[2]))
+    predictions_with_fake_columns[:, -1] = predictions[i].reshape(-1)
+
+    # Geri ölçeklendirme
+    y_test_rescaled.append(scaler.inverse_transform(y_test_with_fake_columns)[:, -1])
+    predictions_rescaled.append(scaler.inverse_transform(predictions_with_fake_columns)[:, -1])
+
+
+# Örnek bir istasyon (station_index) için tahmin ve gerçek de?erlerin grafi?ini çizelim
+station_index = 400
+
+# Zaman aral??? (24 ay)
+time_range = np.arange(1, len(y_test_rescaled[station_index]) + 1)
+
+# Grafik olu?turma
+plt.figure(figsize=(10, 6))
+plt.plot(time_range, y_test_rescaled[station_index], label='Gerçek De?erler', marker='o')
+plt.plot(time_range, predictions_rescaled[station_index], label='Tahmin Edilen De?erler', marker='x')
+plt.title(f'?stasyon {station_index} için Gerçek ve Tahmin Edilen De?erler (Orijinal Ölçek)')
+plt.xlabel('Ay')
+plt.ylabel('Yer Alt? Su Yüksekli?i')
+plt.legend()
+plt.grid(True)
+plt.show()
+
+smape_value1 = smape(y_test_rescaled, predictions_rescaled)
+print(f"SMAPE: {smape_value1}")
+
+smape_value2 = smape(y_test, predictions)
+print(f"SMAPE: {smape_value2}")
