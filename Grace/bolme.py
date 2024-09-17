@@ -1,4 +1,4 @@
-import modin.pandas as pd
+import pandas as pd
 import xarray as xr
 import pickle
 from datetime import datetime, timedelta
@@ -203,6 +203,6 @@ df_filtered = df_filtered[["date", "lat", "lon", "lwe_thickness"]]
 df_filtered.to_pickle('Grace/pkl_files/df_filtered.pkl')
 ########################################################################################################################
 
-df_filtered = pd.read_pickle("Grace/pkl_files/df_filtered.pkl")
+df_filtered = pd.read_pickle("Grace/pkl_files/df_grace_filtered.pkl")
 
 df_filtered.head()

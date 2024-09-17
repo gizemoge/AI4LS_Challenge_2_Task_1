@@ -12,7 +12,6 @@ import re
 import numpy as np
 import modin.pandas as pd
 from collections import OrderedDict
-from bolme import df_land
 
 pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', None)
@@ -24,6 +23,12 @@ pd.set_option('display.width', 500)
 ########################################################################################################################
 # 1. GLDAS
 ########################################################################################################################
+
+"""
+The short names with extension “_tavg” are backward 3-hour averaged variables.
+The short names with extension “_acc” are backward 3-hour accumulated variables.
+The short names with extension “_inst” are instantaneous variables.
+"""
 
 # 1.1. Fetch data
 file_path = "Grace/datasets/subset_GLDAS_NOAH025_M_2.1_20240915_100717_.txt"
@@ -224,16 +229,22 @@ ds2014 = xr.open_dataset('Grace/datasets/tas_Amon_GISS-E2-1-G_historical_r1i1p5f
 
 ds2014.variables
 ds2014.info()
-
+ds2014.data_vars
 # S?cakl?k verilerine eri?in
-tas2014 = ds2014['tas']
-tas_df_2014 = tas2014.to_dataframe().reset_index()
+
+tas_df_2014 = ds2014['tas'].to_dataframe().reset_index()
 
 
 tas_df_2014.head()
 tas_df_2014["time"].value_counts()
+tas_df_2014[tas_df_2014["lat"] < -88]
 
 tas_df_2014.shape
+
+
+tas_df_2014_changes = tas_df_2014[tas_df_2014['lat'] != tas_df_2014['lat'].shift()]
+tas_df_2014_changes.head()
+
 
 ##############################################################
 
@@ -252,7 +263,7 @@ df_2024.shape # (2471040, 5)
 # 3. POPULATION
 ########################################################################################################################
 
-ds_population = xr.open_dataset('Grace/datasets/SEDAC_Columbia_population_count_30_min.nc')
+ds_population = xr.open_dataset('Grace/datasets/gpw_v4_population_count_adjusted_rev11_30_min.nc')
 
 ds_population.data_vars
 df_population = ds_population["UN WPP-Adjusted Population Count, v4.11 (2000, 2005, 2010, 2015, 2020): 30 arc-minutes"].to_dataframe().reset_index()
@@ -261,5 +272,17 @@ df_population.isnull().sum()
 df_population.shape
 
 df_population["raster"].value_counts()
+
+df_population.head()
+
+############################################
+
+with open("Grace/pkl_files/monthly_gldas_dict_filtered_float16.pkl", "rb") as f:
+    gldas_dict = pickle.load(f)
+
+gldas_dict.keys()
+gldas_dict["200204"].head()
+
+
 
 
