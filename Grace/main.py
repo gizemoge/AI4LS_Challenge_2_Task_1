@@ -3,15 +3,19 @@ import xarray as xr
 pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', None)
 pd.set_option('display.max_colwidth', None)
+import numpy as np
 
 ###################################################################################################################### 1
-ds = xr.open_dataset('Grace/datasets/(1)CSR_GRACE-FO_RL0602_Mascons_MasconC30-component.nc')
+ds = xr.open_dataset('Grace/datasets/(10)CSR_GRACE_GRACE-FO_RL0602_Mascons_all-corrections.nc')
 # ds = dataset
 
-ds
+import pprint
+pprint.pprint(ds.attrs)
+
+
+ds.info()
 # ds metadatay? bulunduruyor
 # 4 section var: Dimensions, Coordinates, Data Variables ve Attributes
-
 
 
 ds.coords
@@ -54,8 +58,8 @@ lwe_thickness.sel(time=slice('107.0','227.5')).sel(lat=-27.47, lon=153.03, metho
 
 ##############
 df_lwe = ds['lwe_thickness'].to_dataframe().reset_index()
-df_lwe.head()
-df_lwe.shape  # (240537600, 4) OHA
+df_lwe.head(20)
+df_lwe.shape  # (240537600, 4)
 
 df_lwe["time"].nunique()  # 232
 # Mart 2002'den bu yana toplam 269 ay geçti?
@@ -63,9 +67,29 @@ df_lwe["time"].nunique()  # 232
 # dünyada 90 enlem 180 boylam var
 df_lwe["lat"].nunique()  # 720
 df_lwe["lon"].nunique()  # 1440
-720/90
-1440/180
+df_lwe["lwe_thickness"].nunique()
+
+720/180
+1440/360
 # uydular dünyan?n etraf?nda 8 defa tam tur dönmü? olabilir mi?
+
+#########################################################
+# bu noktada bir gruplama yap?p veriyi küçültmeyi deniyoruz
+############################################################
+#ba?ka bir py dosyas?nda deveam etcem
+
+
+
+
+
+
+
+
+
+
+################################################################
+
+
 
 
 df_tb = ds['time_bounds'].to_dataframe().reset_index()
@@ -84,21 +108,38 @@ merged_df = pd.merge(df_lwe.tail(30), df_tb.tail(30), on='time')
 print(merged_df)
 
 
-###################################################################################################################### 2
-ds_2 = xr.open_dataset('Grace/datasets/(2)CSR_GRACE-FO_RL0602_Mascons_SLR-C30-component.nc')
 
-ds_2
-ds_2.variables
-ds_2.data_vars
-ds_2.coords
 
-ds_2.attrs
+
+
+
+
+
+##################################################
+# Ba?lang?ç tarihi
+start_date = pd.Timestamp("2002-01-01")
+
+# time verisi
+time_values = [107.0, 129.5, 227.5]  # Örnek zaman verileri
+
+# Zaman? tarihe çevir
+date_times = pd.to_timedelta(time_values, unit='D') + start_date
+print(date_times)
+
+##############################
+time_bounds_values = [[94.0, 120.0], [122.0, 137.0], [212.0, 227.5]]  # Örnek time_bounds verisi
+
+# time_bounds'? tarihe çevir
+date_bounds = [(pd.to_timedelta(bounds[0], unit='D') + start_date,
+                pd.to_timedelta(bounds[1], unit='D') + start_date)
+                for bounds in time_bounds_values]
+print(date_bounds)
 
 ###################################################################################################################### 3
 ds_3 = xr.open_dataset('Grace/datasets/(3)CSR_GRACE_GRACE-FO_RL06_Mascons_v02_LandMask.nc')
 # land mask
 
-ds_3
+ds_3.info()
 ds_3.variables
 ds_3.data_vars
 ds_3.coords
@@ -108,8 +149,8 @@ LO_val = ds_3["LO_val"]
 LO_val.shape
 
 df_3 = ds_3['LO_val'].to_dataframe().reset_index()
-df_3.head()
-
+df_3.head(30)
+df_3.shape
 df_3["lat"].nunique()  # 720
 df_3["lon"].nunique()  # 1440
 df_3["LO_val"].nunique()  # 2
@@ -130,70 +171,19 @@ ds_4.data_vars
 ds_4.coords
 ds_4.attrs
 
-###################################################################################################################### 5
-ds_5 = xr.open_dataset('Grace/datasets/(5)CSR_GRACE_GRACE-FO_RL0602_Mascons_GAD-component.nc')
+########################################################################################################################
+# 'lwe_thickness' de?i?kenini DataFrame'e dönü?türme
+df_lwe = ds['lwe_thickness'].to_dataframe().reset_index()
 
-ds_5
-ds_5.variables
-ds_5.data_vars
-ds_5.coords
-ds_5.attrs
-
-###################################################################################################################### 6
-ds_6 = xr.open_dataset('Grace/datasets/(6)CSR_GRACE_GRACE-FO_RL0602_Mascons_GIA-component.nc')
-
-ds_6
-ds_6.variables
-ds_6.data_vars
-ds_6.coords
-ds_6.attrs
-
-###################################################################################################################### 7
-ds_7 = xr.open_dataset('Grace/datasets/(7)CSR_GRACE_GRACE-FO_RL0602_Mascons_GSU-component.nc')
-
-ds_7
-ds_7.variables
-ds_7.data_vars
-ds_7.coords
-ds_7.attrs
+# DataFrame'in ilk birkaç sat?r?n? görüntüleme
+print(df_lwe.head(30))
 
 
-###################################################################################################################### 8
-ds_8 = xr.open_dataset('Grace/datasets/(8)CSR_GRACE_GRACE-FO_RL0602_Mascons_MasconC20-component.nc')
-
-ds_8
-ds_8.variables
-ds_8.data_vars
-ds_8.coords
-ds_8.attrs
+# LWE: Liquid water equivalent thickness
 
 
-###################################################################################################################### 9
-ds_9 = xr.open_dataset('Grace/datasets/(9)CSR_GRACE_GRACE-FO_RL0602_Mascons_SLR-C20-component.nc')
+# 'time_bounds' de?i?kenini DataFrame'e dönü?türme
+df_tb = ds['time_bounds'].to_dataframe().reset_index()
 
-ds_9
-ds_9.variables
-ds_9.data_vars
-ds_9.coords
-ds_9.attrs
-
-
-##################################################################################################################### 10
-ds_10 = xr.open_dataset('Grace/datasets/(10)CSR_GRACE_GRACE-FO_RL0602_Mascons_all-corrections.nc')
-
-ds_10
-ds_10.variables
-ds_10.data_vars
-ds_10.coords
-ds_10.attrs
-
-
-##################################################################################################################### 11
-ds_11 = xr.open_dataset('Grace/datasets/(11)CSR_GRACE_GRACE-FO_RL0602_Mascons_degree1-component.nc')
-
-ds_11
-ds_11.variables
-ds_11.data_vars
-ds_11.coords
-ds_11.attrs
-
+# DataFrame'in ilk birkaç sat?r?n? görüntüleme
+print(df_tb.head(20))
