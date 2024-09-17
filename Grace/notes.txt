@@ -66,5 +66,39 @@ https://climatedataguide.ucar.edu/climate-data/grace-gravity-recovery-and-climat
 
 
 
+####### hesaplamalar
+yani grace bir su ölçümü yapmıyor. kütle ölçümü yapıyor. peki bu kütle ölçümünden nasıl karasal su rezervine ulaşıyor?
 
 
+Çok iyi bir nokta yakaladınız. GRACE'in (Gravity Recovery and Climate Experiment) çalışma prensibi ve verilerin yorumlanması hakkında daha detaylı bir açıklama yapalım:
+
+GRACE'in temel prensibi:
+GRACE, yörüngede dönen iki uydudan oluşur.
+Bu uydular, Dünya'nın yerçekimi alanındaki çok küçük değişiklikleri ölçer.
+Yerçekimi alanındaki değişiklikler, yeryüzündeki kütle dağılımının değişmesiyle ilgilidir.
+Kütle ölçümünden su tahminine:
+GRACE doğrudan su ölçümü yapmaz, kütle değişimlerini ölçer.
+Karasal Su Rezervi (TWS) tahmini, bir dizi varsayım ve model kullanılarak yapılır: a) Jeofizik modeller: Katı Dünya'nın kütlesel değişimleri (örneğin, buzul geri tepmesi) modellenir ve çıkarılır. b) Atmosferik ve okyanus modelleri: Atmosfer ve okyanuslardaki kütle değişimleri modellenir ve çıkarılır. c) Kalan sinyalin yorumlanması: Geriye kalan kütle değişimleri, çoğunlukla su kütlesindeki değişimler olarak yorumlanır.
+TWS bileşenleri:
+Yüzey suyu (nehirler, göller)
+Kar ve buz
+Toprak nemi
+Yeraltı suyu
+Bitki örtüsündeki su (kanopi su depolaması)
+Veri işleme ve kalibrasyon:
+GRACE verileri, diğer yer tabanlı ölçümler ve hidrolojik modellerle karşılaştırılır ve kalibre edilir.
+Bölgesel ve mevsimsel faktörler dikkate alınarak düzeltmeler yapılır.
+Belirsizlikler ve sınırlamalar:
+GRACE'in uzaysal çözünürlüğü sınırlıdır (genellikle birkaç yüz kilometre).
+Küçük ölçekli su değişimleri doğrudan ölçülemez.
+TWS bileşenlerini (örneğin, yeraltı suyu vs. yüzey suyu) ayırt etmek için ek modeller gerekir.
+Doğrulama:
+GRACE-tabanlı TWS tahminleri, yer tabanlı ölçümler, diğer uydu verileri ve hidrolojik modellerle karşılaştırılarak doğrulanır.
+Özetle, GRACE kütle ölçümünden karasal su rezervine geçiş, karmaşık bir modelleme ve veri işleme süreci gerektirir. Bu süreç, jeofizik, atmosferik ve hidrolojik modellerin kombinasyonunu içerir ve çeşitli varsayımlara dayanır. Sonuç olarak elde edilen TWS tahminleri, doğrudan ölçüm olmasa da, geniş ölçekli su kütlesi değişimlerini izlemek için değerli bir araç sağlar.
+
+
+
+iki uydu aralarındaki mesafayi referans alarak çekim kuvveti ölçülüyor. bu çekimden de mass miktarı hesaplanıyor. Newton'ın çekim yasası.
+bu mass miktarından da sonrasında kara ve buzul miktarını çıkartıyolar ve geriye karasal su miktarı kalıyor.
+
+sea ice datası bizim -59 sonrasını almadığımız için işimize yaramayacak bunu da söyleyebiliriz sunumda
