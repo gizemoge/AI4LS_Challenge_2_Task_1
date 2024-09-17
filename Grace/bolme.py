@@ -54,12 +54,12 @@ df.head(10)
 
 # DataFrame'i pickle format?nda kaydetme
 df.to_pickle('Grace/pkl_files/grace_float16_20.pkl')
-"""
+
 
 # Pickle format?ndaki DataFrame'i yükleme
 df = pd.read_pickle('Grace/pkl_files/grace_float16_20.pkl')
 df.head(10)
-
+"""
 
 ###################################################################################################################### 3
 # LAND MASK
@@ -100,7 +100,7 @@ ds_lwe.variables
 ds_lwe.data_vars
 ds_lwe.coords
 
-ds.data_vars
+ds_lwe.data_vars
 # Data variables:
 # time_bounds: Zaman dilimlerinin sinir bilgilerini içerir ve iki boyutu vardir: zaman ve sinir
 # lwe_thickness: sivi su esdeger kalinligi verilerini içerir ve üç boyutu vardir: zaman, enlem, ve boylam
@@ -178,13 +178,12 @@ df_filtered.shape
 
 df_filtered.drop("land_mask", axis=1, inplace=True)
 df_filtered.reset_index(drop=True, inplace=True)
-# DataFrame'i pickle format?nda kaydetme
-df_filtered.to_pickle('Grace/pkl_files/df_filtered.pkl')
+
 
 ########################################################################################################################
 # tarihi düzenleme:
 ########################################################################################################################
-df_filtered = pd.read_pickle('Grace/pkl_files/df_filtered.pkl')
+
 
 # Ba?lang?ç tarihi
 start_date = datetime.strptime('2002-01-01', '%Y-%m-%d')
@@ -200,9 +199,14 @@ df_filtered['date'] = df_filtered['time'].apply(lambda x: convert_time_to_date(x
 df_filtered['date'] = df_filtered['date'].dt.strftime('%Y-%m-%d')
 df_filtered = df_filtered[["date", "lat", "lon", "lwe_thickness"]]
 
-df_filtered.to_pickle('Grace/pkl_files/df_filtered.pkl')
+df_filtered.to_pickle('Grace/pkl_files/df_grace_filtered.pkl')
 ########################################################################################################################
 
 df_filtered = pd.read_pickle("Grace/pkl_files/df_grace_filtered.pkl")
 
 df_filtered.head()
+
+
+
+
+
