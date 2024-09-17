@@ -1,30 +1,16 @@
 # IMPORTS
-import tensorflow as tf
-
-# inter_op ve intra_op paralellik ayarlar?
-tf.config.threading.set_inter_op_parallelism_threads(4)  # Örne?in, 4 i? parçac??? kullan
-tf.config.threading.set_intra_op_parallelism_threads(2)  # ??lem ba??na 2 i? parçac??? kullan
-import os
-import warnings
-from statsmodels.tools.sm_exceptions import ConvergenceWarning
-from sklearn.model_selection import train_test_split
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense, Dropout
-from keras.callbacks import EarlyStopping
-from datetime import datetime
-from scipy.spatial import distance
-from collections import Counter
-import seaborn as sns
-import itertools
-import pickle
 import pandas as pd
 import numpy as np
-from sklearn.preprocessing import MinMaxScaler
-import matplotlib.pyplot as plt
-from statsmodels.tsa.statespace.sarimax import SARIMAX
 import matplotlib
-matplotlib.use('Qt5Agg')
+import warnings
+import pickle
+import os
+from statsmodels.tools.sm_exceptions import ConvergenceWarning
+from datetime import datetime
+from scipy.spatial import distance
+from statsmodels.tsa.statespace.sarimax import SARIMAX
 import matplotlib.pyplot as plt
+# matplotlib.use('Qt5Agg')
 pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', None)
 pd.set_option('display.float_format', lambda x: '%.3f' % x)
@@ -217,7 +203,6 @@ def save_to_pickle(item, filename):
     with open(filename, 'wb') as f:
         pickle.dump(item, f)
 
-
 ########################################################################################################################
 # Creating Dataframes from given CSVs
 ########################################################################################################################
@@ -244,7 +229,7 @@ surface_water_folders = [
     ("Schwebstoff-Tagesfracht", "sediment_"),
     ("Q-Tagesmittel", "surface_water_fr_")]
 
-# Groundwater Dictionary (Filtered to the requested 487 stations)
+# Groundwater Dictionary (Filtered down to the requested 487 stations)
 stations = pd.read_csv(os.path.join("Ehyd", "datasets_ehyd", "gw_test_empty.csv"))
 station_list = [col for col in stations.columns[1:]]
 filtered_groundwater_dict, filtered_gw_coordinates = process_and_store_data(
@@ -263,12 +248,33 @@ sediment_dict, sediment_coord = process_and_store_data(os.path.join("Ehyd", "dat
 surface_water_fr_dict, surface_water_fr_coord = process_and_store_data(os.path.join("Ehyd", "datasets_ehyd", "Surface_Water", surface_water_folders[3][0]), surface_water_coordinates, "surface_water_fr_")
 
 ########################################################################################################################
-# Gathering associated features for 487 stations
+# Gathering associated additional features for required 487 stations
 ########################################################################################################################
 def calculate_distance(coord1, coord2):
+    """
+    Calculates the Euclidean distance between two points in a Cartesian coordinate system.
+
+    Args:
+        coord1 (tuple): A tuple representing the coordinates (x, y) of the first point.
+        coord2 (tuple): A tuple representing the coordinates (x, y) of the second point.
+
+    Returns:
+        float: The Euclidean distance between the two points.
+    """
     return distance.euclidean(coord1, coord2)
 
 def find_nearest_coordinates(gw_row, df, k=20):
+    """
+    Finds the `k` nearest coordinates from a DataFrame to a given point.
+
+    Args:
+        gw_row (pd.Series): A pandas Series representing the coordinates (x, y) of the given point.
+        df (pd.DataFrame): A DataFrame containing the coordinates with columns "x" and "y".
+        k (int, optional): The number of nearest coordinates to return. Defaults to 20.
+
+    Returns:
+        pd.DataFrame: A DataFrame containing the `k` nearest coordinates to the given point.
+    """
     distances = df.apply(lambda row: calculate_distance(
         (gw_row['x'], gw_row['y']),
         (row['x'], row['y'])
@@ -323,6 +329,7 @@ data = add_nearest_coordinates_column(sediment_coord, 'nearest_sediment', 1, df_
 data = add_nearest_coordinates_column(surface_water_fr_coord, 'nearest_owf_fr', 3, df_to_merge=data)
 data.drop(["x", "y"], axis=1, inplace=True)
 
+# For the .pkl file of the above dataframe named 'data'
 file_path = os.path.join('Ehyd', 'pkl_files', 'data.pkl')
 save_to_pickle(data, file_path)
 
@@ -330,6 +337,17 @@ save_to_pickle(data, file_path)
 # Imputing NaN Values
 ########################################################################################################################
 def nan_imputer(dict):
+    """
+    Imputes missing values in a dictionary of DataFrames by filling NaNs with the corresponding monthly means.
+
+    Args:
+        dict (dict): A dictionary where the keys are DataFrame names and the values are DataFrames
+                     containing a 'Values' column with missing values represented as 'NaN'.
+
+    Returns:
+        dict: A dictionary with the same keys as the input, but with NaN values in each DataFrame
+              replaced by the monthly mean of the 'Values' column.
+    """
     new_dict = {}
     for df_name, df in dict.items():
         df_copy = df.copy(deep=True)  # Create a deep copy
@@ -370,14 +388,16 @@ filled_dict_list = [filled_gw_temp_dict, filled_filtered_groundwater_dict, fille
 
 def add_lag_and_rolling_mean(df, window=6):
     """
-    Adds lagged and rolling mean columns to a DataFrame.
+    Adds lag features and rolling mean to a DataFrame.
 
     Args:
-        df (pandas.DataFrame): The input DataFrame containing the data.
-        window (int, optional): The window size for calculating the rolling mean. Default is 6.
+        df (pd.DataFrame): A DataFrame with at least one column, which will be used to create lag features
+                           and compute rolling mean. The first column of the DataFrame will be used.
+        window (int, optional): The window size for computing the rolling mean. Defaults to 6.
 
     Returns:
-        pandas.DataFrame: The DataFrame with additional columns for lagged values and rolling means.
+        pd.DataFrame: The original DataFrame with additional columns for lag features and rolling mean.
+                      Includes lag features for 1, 2, and 3 periods and rolling mean columns with the specified window size.
     """
     column_name = df.columns[0]
     df['lag_1'] = df[column_name].shift(1)
@@ -395,7 +415,7 @@ for dictionary in filled_dict_list:
         dictionary[key] = add_lag_and_rolling_mean(df)
 
 ########################################################################################################################
-# Zero Padding and changing the data type to float32
+# Zero Padding and Data Type Change (float32)
 ########################################################################################################################
 for dictionary in filled_dict_list:
     for key, df in dictionary.items():
@@ -403,29 +423,21 @@ for dictionary in filled_dict_list:
         df = df.astype(np.float32)
         dictionary[key] = df
 
-# finalleri pickle'a alma
-directory = 'Ehyd/pkl_files'
-
+# For the making of .pkl files of the dictionaries in the list named 'filled_dict_list'
 for dictionary in filled_dict_list:
     dict_name = [name for name in globals() if globals()[name] is dictionary][0]
-    filename = os.path.join(directory, f'{dict_name}.pkl')
+    filename = os.path.join("Ehyd", "pkl_files", f'{dict_name}.pkl')
     save_to_pickle(dictionary, filename)
 
-# Calling pickle files back from the directory
-pkl_files = [f for f in os.listdir(directory) if f.endswith('.pkl')]
-
-for pkl_file in pkl_files:
-    file_path = os.path.join(directory, pkl_file)
-    with open(file_path, 'rb') as file:
-        var_name = pkl_file[:-4]
-        globals()[var_name] = pickle.load(file)
-
 ########################################################################################################################
-# LSTM-formatted dataframes and the .pkl file
+# Creating two new dictionaries:
+#   new_dataframes: is a dictionary storing DataFrames specific to each measurement station, containing both the
+#                   station's data and associated features obtained from the data DataFrame.
+#   monthly_dataframes: contains monthly versions of the data from new_dataframes, with keys representing months
+#                   instead of measurement station IDs.
 ########################################################################################################################
 data['hzbnr01'] = data['hzbnr01'].apply(lambda x: [x])
 
-#### 487
 data_sources = {
     'nearest_gw_temp': ('gw_temp', filled_gw_temp_dict),
     'nearest_rain': ('rain', filled_rain_dict),
@@ -438,22 +450,20 @@ data_sources = {
     'nearest_owf_fr': ('owf_fr', filled_surface_water_fr_dict),
     'nearest_sediment': ('sediment', filled_sediment_dict)
 }
+
 new_dataframes = {}
-# Her bir station için döngü
 for idx, row in data.iterrows():
-    # Kodlari liste içerisinden ç?kar
     code = str(row['hzbnr01'][0])
 
-    # Sözlükten DataFrame'i al
     if code in filled_filtered_groundwater_dict:
-        # Yeni DataFrame olu?tur
+
         df = filled_filtered_groundwater_dict[code].copy()
 
         for key, (prefix, source_dict) in data_sources.items():
             for i, code_value in enumerate(row[key]):
                 code_str = str(code_value)
                 source_df = source_dict.get(code_str, pd.DataFrame())
-                # Yeni sütunlar? ekle
+
                 source_df = source_df.rename(columns=lambda x: f'{prefix}_{i + 1}_{x}')
                 df = df.join(source_df, how='left')
 
@@ -462,512 +472,333 @@ for idx, row in data.iterrows():
                     if i == 2:
                         df[f"{prefix}_{column}_mean"] = (df[f"{prefix}_{i + 1}_{column}"] + df[f"{prefix}_{i}_{column}"] + df[f"{prefix}_{i - 1}_{column}"]) / 3
 
-        # Sonuçlar? sözlü?e ekle
         new_dataframes[code] = df
 
-# 744
-monthly_dataframes = {}
-# Her y?l ve ay için döngü
-for year in range(1960, 2022):  # örnek olarak 1960'dan 2024'e kadar
-    for month in range(1, 13):  # 1'den 12'ye kadar
-        # Y?l ve ay bilgisi ile olu?turulan anahtar
+monthly_dict_85to21 = {}
+for year in range(1985, 2022):
+    for month in range(1, 13):
+
         key = f"{year}_{month:02d}"
 
-        # Bo? bir liste olu?turup o y?l ve ay için verileri toplamak
         monthly_data = []
 
         for df_id, df in new_dataframes.items():
-            # ?ndex'teki tarih bilgisi
+
             mask = (df.index.to_period("M").year == year) & (df.index.to_period("M").month == month)
 
             if mask.any():
-                # ?lgili ay için filtrelenmi? veri
+
                 filtered_df = df[mask]
 
-                # ?ndeksleri güncelle
                 new_index = [f"{df_id}" for i in range(len(filtered_df))]
                 filtered_df.index = new_index
 
                 monthly_data.append(filtered_df)
 
-        # E?er bu y?l ve ay için veri varsa, bunlar? birle?tir ve yeni DataFrame olu?tur
         if monthly_data:
-            # Her bir DataFrame'in ayn? sütun ve indekslere sahip oldu?unu varsayarak birle?tirme
+
             combined_df = pd.concat(monthly_data)
 
-            # Sonuçlar? saklama
-            monthly_dataframes[key] = combined_df
+            monthly_dict_85to21[key] = combined_df
 
-
-file_path = os.path.join("Ehyd", "pkl_files", 'monthly_dataframes.pkl')
-save_to_pickle(monthly_dataframes, file_path)
-
-"""
-########################################################################################################################
-# Normalization
-########################################################################################################################
-scaler = MinMaxScaler(feature_range=(0, 1))
-
-# normalized_monthly_dfs_list = [pd.DataFrame(scaler.fit_transform(df), index=df.index, columns=df.columns) for month, df in monthly_dataframes.items()]
-
-normalized_dataframes = {}
-for month, df in monthly_dataframes.items():
-    normalized_df = pd.DataFrame(scaler.fit_transform(df), index=df.index, columns=df.columns)
-    normalized_dataframes[month] = normalized_df
-
-
-
-for key, value in normalized_dataframes.items():
-    print(value.tail())
-
-
-# zero-padding kontrolü ve dataframe ay?klamas?
-monthly_zero_ratio_dict = {}
-value_count = (normalized_dataframes["1960_01"].shape[0] * normalized_dataframes["1960_01"].shape[1]) # 89608
-
-for key, df in normalized_dataframes.items():
-    zero_counts = (df == 0).sum().sum()
-    zero_ratio = zero_counts / value_count
-    monthly_zero_ratio_dict[key] = zero_ratio
-
-keys = list(monthly_zero_ratio_dict.keys())
-values = list(monthly_zero_ratio_dict.values())
-last_value_above_threshold = next((val for val in reversed(values) if val > 0.5), None) # 0.501
-key_of_last_value_above_threshold = keys[values.index(last_value_above_threshold)] # 1984_11
-
-plt.figure(figsize=(10, 6))
-plt.plot(keys, values)
-plt.xlabel('Date (Year-Month)')
-plt.ylabel('Zero Ratio')
-plt.xticks(rotation=45)
-plt.title('Zero Ratio over the Dataframes')
-plt.tight_layout()
-plt.show()
-
-normalized_dict_85to21 = {k: v for k, v in normalized_dataframes.items() if k >= "1985_01"}
-len(normalized_dict_85to21) # 444
-normalized_dict_85to21["1985_01"].shape # (487, 184)
-
-file_path = os.path.join("Ehyd", "pkl_files", 'normalized_dict_85to21.pkl')
-save_to_pickle(normalized_dict_85to21, file_path)
-
-# Dosyay? aç?n ve içeri?i yükleyin
-with open(file_path, 'rb') as file:
-    normalized_dict_85to21 = pickle.load(file)
-"""
-
-########################################################################################################################
-# LSTM Model
-########################################################################################################################
-# 7 eylül Cumartesi
-
-with open(os.path.join('Ehyd', 'pkl_files', 'monthly_dataframes.pkl'), 'rb') as file:
-    monthly_dataframes = pickle.load(file)
-
-monthly_dict_85to21 = {k: v for k, v in monthly_dataframes.items() if k >= "1985_01"}
-len(monthly_dict_85to21)
-
+# Creating the .pkl of the monthly_dict_85to21
 file_path = os.path.join("Ehyd", "pkl_files", 'monthly_dict_85to21.pkl')
 save_to_pickle(monthly_dict_85to21, file_path)
 
-###############################################
-# h?zland?r?c? faktörler deneme:
-##############################################3
-# Dosyay? aç?n ve içeri?i yükleyin
+file_path = os.path.join("Ehyd", "pkl_files", 'new_dataframes.pkl')
+save_to_pickle(new_dataframes, file_path)
+
+with open(os.path.join('Ehyd', 'pkl_files', 'new_dataframes.pkl'), 'rb') as file:
+    new_dataframes = pickle.load(file)
+
+########################################################################################################################
+# SARIMA Model
+########################################################################################################################
+
 with open(os.path.join('Ehyd', 'pkl_files', 'monthly_dict_85to21.pkl'), 'rb') as file:
     monthly_dict_85to21 = pickle.load(file)
 
+monthly_dict_with_correlation = monthly_dict_85to21.copy()
 
-lookback = 36  # Modelin bakaca?? geçmi? ay say?s?
-test_size = 24  # Tahmin edilecek 24 ay
-batch_size = 256  # Bir seferde i?lenecek veri miktar?
+def average_correlation_feature_selection(data_dict, threshold=0.1):
+    """
+    Computes average correlation of features with the target variable across multiple dataframes and selects features
+    based on a correlation threshold.
 
-X_train, y_train = [], []
-X_test, y_test = [], []
+    Args:
+        data_dict (dict): A dictionary where each value is a pandas DataFrame. Each DataFrame should contain a column
+                          named 'Values' representing the target variable.
+        threshold (float, optional): The minimum absolute correlation value required for a feature to be selected.
+                                      Defaults to 0.1.
 
-# Her istasyon verisini e?itim ve test olarak ay?r?yoruz
-for month, df in monthly_dict_85to21.items():
-    values = df.values  # DataFrame'i numpy array'e çeviriyoruz
+    Returns:
+        list: A list of feature names that have an average correlation with the target variable above the specified
+              threshold.
+    """
+    feature_corr_sum = None
+    feature_count = 0
 
-    # E?itim verisi: lookback ve test_size d???nda kalan veriler
-    num_samples = len(values) - lookback - test_size
-    for start in range(0, num_samples, batch_size):
-        end = min(start + batch_size, num_samples)
-        X_train_batch = np.array([values[i:i + lookback] for i in range(start, end)])
-        y_train_batch = np.array([values[i + lookback:i + lookback + test_size, 0] for i in range(start, end)])
+    for df in data_dict.values():
+        corr_matrix = df.corr()
+        target_corr = corr_matrix['Values'].drop('Values')
 
-        # X_train ve y_train listesine batch'leri ekleme
-        X_train.append(X_train_batch)
-        y_train.append(y_train_batch)
+        if feature_corr_sum is None:
+            feature_corr_sum = target_corr
+        else:
+            feature_corr_sum += target_corr
 
-    # Test verisi: Son 12 ay ve test verisi
-    X_test.append(values[-(lookback + test_size):-test_size])  # Son 12 ayl?k geçmi? veriyi al?yoruz
-    y_test.append(values[-test_size:, 0])  # Sonraki 24 ay?n target verisi
+        feature_count += 1
 
-# X_train ve y_train'i numpy array'lere çeviriyoruz (batch'ler halinde)
-X_train = np.concatenate(X_train, axis=0)
-y_train = np.concatenate(y_train, axis=0)
-X_test = np.array(X_test)
-y_test = np.array(y_test)
+    avg_corr = feature_corr_sum / feature_count
 
-####
-print(type(X_train))  # This will confirm if it's a list
-print(type(X_train[0]))  # This checks what type the first element is
-print(X_train[:5])  # Print the first 5 elements to understand their structure
-n_samples, n_timesteps, n_features = X_train.shape
+    selected_features = avg_corr[avg_corr.abs() > threshold].index.tolist()
 
-import numpy as np
+    return selected_features
 
-X_train = np.array(X_train)
-print(X_train.shape)  # Ensure the shape is (888, n_features)
-####
+common_features = average_correlation_feature_selection(monthly_dict_with_correlation, threshold=0.4)  # 39
 
-# Assuming X_train is a list of 3D arrays (n_timesteps, n_features)
-scaler = MinMaxScaler()
-scaled_X_train = []
+# hiperparametre optimizasyonu
+# Yeni ba?lang?ç tarihi
+new_start_date = pd.to_datetime('1985-01-01')
 
-# Loop over each 3D array in X_train
-for X in X_train:
-    # Get the shape of the current 3D array (n_samples, n_timesteps, n_features)
-    n_samples, n_timesteps, n_features = X.shape
-    # Reshape the data to 2D: (n_samples * n_timesteps, n_features)
-    X_reshaped = X.reshape(-1, n_features)
+# Yeni veri çerçeveleri sözlü?ü
+adjusted_dataframes = {}
 
-    # Fit and transform the data
-    X_scaled = scaler.fit_transform(X_reshaped)
+for key, df in new_dataframes.items():
+    try:
+        # Mevcut indeksin tarih format?na dönü?türülmesi
+        df.index = pd.to_datetime(df.index)
 
-    # Reshape back to the original shape: (n_samples, n_timesteps, n_features)
-    X_scaled = X_scaled.reshape(n_samples, n_timesteps, n_features)
+        # Veriyi 1985-01-01 tarihinden itibaren filtreleme
+        df_filtered = df[df.index >= new_start_date]
 
-    # Append the scaled array to the new list
-    scaled_X_train.append(X_scaled)
+        # Yeni sözlü?e ekleme
+        adjusted_dataframes[key] = df_filtered
+    except Exception as e:
+        print(f"An error occurred with key {key}: {e}")
 
-scaled_y_train = []
-for y in y_train:
-    n_samples, n_timesteps, n_features = y.shape
-    # Reshape the data to 2D: (n_samples * n_timesteps, n_features)
-    y_reshaped = y.reshape(-1, n_features)
+# adjusted_dataframes içinde zaman serilerinin yeni ba?lang?ç tarihi ile güncellenmi? halleri bulunur.
 
-    # Fit and transform the data
-    y_scaled = scaler.fit_transform(y_reshaped)
 
-    # Reshape back to the original shape: (n_samples, n_timesteps, n_features)
-    y_scaled = y_scaled.reshape(n_samples, n_timesteps, n_features)
+filtered_dataframes = {}
 
-    # Append the scaled array to the new list
-    scaled_y_train.append(y_scaled)
+def filter_dataframe_by_features(df, features):
+    """
+    Filter the DataFrame columns by the specified feature list, while keeping the target column.
 
+    Parameters:
+        df (pd.DataFrame): The DataFrame to filter.
+        features (list): List of column names to keep, excluding the target column.
 
+    Returns:
+        pd.DataFrame: Filtered DataFrame with the target column included.
+    """
+    # Target de?i?keninin ad?n? almak için ilk sütunu ay?r?n
+    target_column = df.columns[0]
 
-###### dilara chatgpt ba?lang?c?
-scaler = MinMaxScaler()
-# Fit on the training data (for example, assuming X_train)
-X_train_scaled = scaler.fit_transform(X_train)
-# Transforming test data using the same scaler
-X_test_scaled = scaler.transform(X_test)
+    # Target de?i?keni hariç sütunlar? belirleyin
+    filtered_features = [target_column] + [col for col in features if col != target_column]
 
-# Later, to revert back the scaled data to original scale:
-X_train_original = scaler.inverse_transform(X_train_scaled)
-X_test_original = scaler.inverse_transform(X_test_scaled)
+    # Belirlenen sütunlar? seçin
+    df_filtered = df[filtered_features]
 
-### biti?
+    return df_filtered
 
 
-############## gizmo
-# Ayl?k verileri y?l baz?nda ay?rarak
-train_data = {k: v for k, v in monthly_dict_85to21.items() if k < '2020_01'}
-test_data = {k: v for k, v in monthly_dict_85to21.items() if k >= '2020_01'}
+for key, df in adjusted_dataframes.items():
+    try:
+        # Target de?i?keni ile birlikte common_features sütunlar?n? filtreleyin
+        filtered_df = filter_dataframe_by_features(df, common_features)
+        filtered_dataframes[key] = filtered_df
+    except KeyError as e:
+        print(f"KeyError: {e} - Some columns in {key} are missing.")
+    except Exception as e:
+        print(f"An error occurred with key {key}: {e}")
 
+for key, value in filtered_dataframes.items():
+    print(value.head())
 
+# filtered_dataframes art?k common_features ile filtrelenmi? veri çerçevelerini içeriyor.
 
-# E?itim setine scaler uygulama
-scaler = MinMaxScaler()
-#scaled_train_data = scaler.fit_transform(train_data)
-# Test setine ayn? scaler'? uygulama
-#scaled_test_data = scaler.transform(test_data)
 
-scaled_train_data = []
-# Loop through each item in the dictionary
-for date, df in train_data.items():
-    # Fit and transform the current data
-    scaled_data = scaler.fit_transform(df)
-    # Store the scaled data back in a new dictionary
-    scaled_train_data.append(df) 
 
-scaled_test_data = []
-for date, df in test_data.items():
-    # Fit and transform the current data
-    scaled_data = scaler.transform(df)
-    # Store the scaled data back in a new dictionary
-    scaled_test_data.append(df)
 
-X_train = scaled_train_data[:400]
-y_train = scaled_train_data[400:]
 
-X_test = scaled_test_data[:44]
-y_test = scaled_test_data[44:]
 
 
 
-scaled_train_data = np.array(scaled_train_data)
 
+import itertools
+import pandas as pd
+from statsmodels.tsa.statespace.sarimax import SARIMAX
+import random
 
+# Hyperparameter Optimization (Model Derecelerini Belirleme)
+p = d = q = range(0, 2)
+pdq = list(itertools.product(p, d, q))  # itertools.product kombolar? getiriyor
+seasonal_pdq = [(x[0], x[1], x[2], 12) for x in list(itertools.product(p, d, q))]  # 12 ayda bir döngü tamamlan?yor
 
+def sarima_optimizer_aic(train, exog, pdq, seasonal_pdq):
+    best_aic, best_order, best_seasonal_order = float("inf"), None, None
+    for param in pdq:
+        for param_seasonal in seasonal_pdq:
+            try:
+                sarimax_model = SARIMAX(train, exog=exog, order=param, seasonal_order=param_seasonal)
+                results = sarimax_model.fit(disp=0)
+                aic = results.aic
+                if aic < best_aic:
+                    best_aic, best_order, best_seasonal_order = aic, param, param_seasonal
+                print('SARIMA{}x{}12 - AIC:{}'.format(param, param_seasonal, aic))
+            except Exception as e:
+                print(f"Exception: {e} - SARIMA{param}x{param_seasonal}12")
+                continue
+    print('SARIMA{}x{}12 - AIC:{}'.format(best_order, best_seasonal_order, best_aic))
+    return best_order, best_seasonal_order
 
+results = {}
 
+# Rastgele 20 veri çerçevesi seç
+sampled_keys = random.sample(list(filtered_dataframes.keys()), 10)
 
-X_train, y_train, X_test, y_test
+for df_id in sampled_keys:
+    df = filtered_dataframes[df_id]
+    if not df.empty:
+        # Target sütunu ve di?er sütunlar? ay?r
+        train = df['Values']
+        exog = df.drop(columns=['Values'])  # 'Values' sütunu d???ndaki di?er sütunlar
+        # Hiperparametre optimizasyonunu yap
+        best_order, best_seasonal_order = sarima_optimizer_aic(train, exog, pdq, seasonal_pdq)
+        results[df_id] = {
+            'Best Order': best_order,
+            'Best Seasonal Order': best_seasonal_order
+        }
+    else:
+        results[df_id] = {
+            'Best Order': None,
+            'Best Seasonal Order': None
+        }
 
-TRAIN A?AMASI                                   TEST A?AMASI
-x_train (train snow bilmemne 2020te kadar)      x_test (rain snow bilmemne 2020den sonra)
-y_train (gw 2020ye kadar)                       y_test (gw w2020den sonra)
-                                                y_pred
+# Sonuçlar? yazd?r
+for df_id, res in results.items():
+    print(f'DataFrame ID: {df_id}')
+    print(f'Best Order: {res["Best Order"]}')
+    print(f'Best Seasonal Order: {res["Best Seasonal Order"]}')
+    print('---')
 
 
-num_features = X_train.shape[2]  # Kaç özellik (sütun) var?
-num_units = 30  # LSTM hücre say?s?
+# Genel olarak, ilk deneme için (1, 0, 1) ve (0, 1, 1, 12)
+# kombinasyonu iyi bir ba?lang?ç noktas? gibi görünüyor çünkü birçok veri setinde bu kombinasyonun iyi çal??t??? gözüküyor.
 
-model = Sequential()
-model.add(LSTM(num_units, input_shape=(lookback, num_features), return_sequences=True))
-model.add(Dropout(0.2))  # Overfitting'i önlemek için
-model.add(LSTM(num_units, return_sequences=False))
-model.add(Dropout(0.2))
-model.add(Dense(24))  # 24 ayl?k tahmin
 
-model.compile(optimizer='adam', loss='mse')
 
-# Early stopping: Do?rulama kayb? 5 dönem boyunca iyile?mezse e?itim duracak
-early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
 
 
-import time
+for month, df in monthly_dict_with_correlation.items():
+    monthly_dict_with_correlation[month] = df[ ['Values'] + common_features]
 
-# E?itim süresini ölçelim
-start_time = time.time()
-# Modeli e?itme
-history = model.fit(X_train, y_train, epochs=10, batch_size=64, validation_split=0.1, callbacks=[early_stopping])
+print(monthly_dict_with_correlation['2021_12'].head())
+print(monthly_dict_with_correlation['2021_12'].shape)
 
-end_time = time.time()
+# Test months to forecast
+forecast_months = ['2020_01', '2020_02', '2020_03', '2020_04', '2020_05', '2020_06',
+                   '2020_07', '2020_08', '2020_09', '2020_10', '2020_11', '2020_12',
+                   '2021_01', '2021_02', '2021_03', '2021_04', '2021_05', '2021_06',
+                   '2021_07', '2021_08', '2021_09', '2021_10', '2021_11', '2021_12']
 
-print(f"Training took {end_time - start_time} seconds")
+train_data = {month: df for month, df in monthly_dict_with_correlation.items() if month not in forecast_months}
 
-# Test verisi üzerinde tahmin yapma
-predictions = model.predict(X_test)
+train_data = {k: v for k, v in train_data.items() if k >= "2000_01"}
 
-# Tahmin sonuçlar? ve gerçek sonuçlar? inceleme
-print("Tahmin edilen de?erler: ", predictions[0:5])
-print("Gerçek test de?erleri: ", y_test[0:5])
 
+all_data = pd.concat([df for df in train_data.values()])
 
+# Her istasyon için 24 ayl?k tahmin yapma
+forecasts = {}
+for station in all_data.index.unique():
+    # ?stasyon verilerini al
+    station_data = all_data.loc[station]
 
+    # Modeli olu?turma ve e?itme
+    model = SARIMAX(
+        station_data['Values'],  # Hedef de?i?ken
+        exog=station_data.drop(columns=['Values']),  # Di?er özellikler
+        order=(1, 0, 1),  # ARIMA parametreleri
+        seasonal_order=(0, 1, 1, 12)  # Mevsimsel ARIMA parametreleri
+    )
+    model_fit = model.fit(disp=False)
 
+    # 24 ayl?k tahmin yap
+    forecast = model_fit.get_forecast(steps=24, exog=station_data.drop(columns=['Values']).values[
+                                                     -24:])  # Son 24 ay?n exog de?erleri
+    forecast_values = forecast.predicted_mean
 
+    # Tahmin sonuçlar?n? sakla
+    forecasts[station] = forecast_values
 
+# Tahmin sonuçlar?n? DataFrame'e ekleme
+forecast_df = pd.DataFrame(forecasts).T
+forecast_df.columns = [f'forecast_month_{i + 1}' for i in range(24)]
 
-######### eda
-lookback = 36  # Modelin bakaca?? geçmi? ay say?s?
-test_size = 24  # Tahmin edilecek 24 ay
-batch_size = 256  # Bir seferde i?lenecek veri miktar?
+# Sonuçlar? yazd?rma
+print(forecast_df)
 
-X_train, y_train = [], []
-X_test, y_test = [], []
+# Test verilerini birle?tirme
+test_data = {month: df for month, df in monthly_dict_with_correlation.items() if month in forecast_months}
+test_data = pd.concat([df for df in test_data.values()])
 
-# Her istasyon verisini e?itim ve test olarak ay?r?yoruz
-for month, df in monthly_dict_85to21.items():
-    values = df.values  # DataFrame'i numpy array'e çeviriyoruz
 
-    # E?itim verisi: lookback ve test_size d???nda kalan veriler
-    num_samples = len(values) - lookback - test_size
-    for start in range(0, num_samples, batch_size):
-        end = min(start + batch_size, num_samples)
-        X_train_batch = np.array([values[i:i + lookback] for i in range(start, end)])
-        y_train_batch = np.array([values[i + lookback:i + lookback + test_size, 0] for i in range(start, end)])
+# SMAPE hesaplama fonksiyonu
+def smape(y_true, y_pred):
+    return 100 * np.mean(2 * np.abs(y_pred - y_true) / (np.abs(y_true) + np.abs(y_pred)))
 
-        # X_train ve y_train listesine batch'leri ekleme
-        X_train.append(X_train_batch)
-        y_train.append(y_train_batch)
 
-    # Test verisi: Son 36 ay ve test verisi
-    X_test.append(values[-(lookback + test_size):-test_size])  # Son 36 ayl?k geçmi? veriyi al?yoruz
-    y_test.append(values[-test_size:, 0])  # Sonraki 24 ay?n target verisi
+# SMAPE de?erlerini hesaplama
+# SMAPE hesaplama fonksiyonu
+def smape(y_true, y_pred):
+    return 100 * np.mean(2 * np.abs(y_pred - y_true) / (np.abs(y_true) + np.abs(y_pred)))
 
-# X_train ve y_train'i numpy array'lere çeviriyoruz
-X_train = np.concatenate(X_train, axis=0)
-y_train = np.concatenate(y_train, axis=0)
-X_test = np.array(X_test)
-y_test = np.array(y_test)
 
-# Veriyi normalle?tirme (MinMaxScaler kullanarak)
-scaler = MinMaxScaler()
+# Genel SMAPE hesaplama
+all_actual = []
+all_predicted = []
 
-# X_train verisi için normalle?tirme
-scaled_X_train = []
+for station in forecast_df.index:
+    # Gerçek de?erleri al
+    actual_values = test_data.loc[station, 'Values'].values
+    predicted_values = forecast_df.loc[station].values
 
-# Her bir örnek (3D array) için normalizasyon yap?yoruz
-for X in X_train:
-    n_timesteps, n_features = X.shape  # ?u an (lookback, n_features) ?eklinde
-    X_reshaped = X.reshape(-1, n_features)  # Veriyi (timesteps, features) olarak 2D'ye indiriyoruz
-    X_scaled = scaler.fit_transform(X_reshaped)  # Veriyi normalle?tiriyoruz
-    X_scaled = X_scaled.reshape(n_timesteps, n_features)  # Tekrar orijinal boyutuna döndürüyoruz
-    scaled_X_train.append(X_scaled)
+    # De?erleri listeye ekle
+    all_actual.extend(actual_values)
+    all_predicted.extend(predicted_values)
 
-# X_test verisi için normalle?tirme
-scaled_X_test = []
+# Genel SMAPE de?erini hesapla
+general_smape = smape(np.array(all_actual), np.array(all_predicted))
+print(f"Genel SMAPE: {general_smape:.2f}%")
+# 0.21 %
 
-for X in X_test:
-    n_timesteps, n_features = X.shape  # ?u an (lookback, n_features) ?eklinde
-    X_reshaped = X.reshape(-1, n_features)  # Veriyi (timesteps, features) olarak 2D'ye indiriyoruz
-    X_scaled = scaler.transform(X_reshaped)  # Test verisine ayn? scaler ile transform yap?yoruz
-    X_scaled = X_scaled.reshape(n_timesteps, n_features)  # Tekrar orijinal boyutuna döndürüyoruz
-    scaled_X_test.append(X_scaled)
+# Belirli bir istasyon kodu için grafik çizme
+def plot_forecast(station_code):
+    # Gerçek de?erleri al
+    actual_values = test_data.loc[station_code, 'Values'].values
+    predicted_values = forecast_df.loc[station_code].values
 
-# scaled_X_train ve scaled_X_test numpy array'e çevirme
-scaled_X_train = np.array(scaled_X_train)
-scaled_X_test = np.array(scaled_X_test)
+    # Tarih aral???n? olu?tur
+    forecast_months = pd.date_range(start='2020-01-01', periods=24, freq='M')
 
-# Veriyi modele beslemeye haz?r hale getirdik
-print(f"X_train shape: {scaled_X_train.shape}")
-print(f"y_train shape: {y_train.shape}")
-print(f"X_test shape: {scaled_X_test.shape}")
-print(f"y_test shape: {y_test.shape}")
-#########
+    # Grafik çizimi
+    plt.figure(figsize=(12, 6))
+    plt.plot(forecast_months, actual_values, label='Gerçek De?erler', marker='o')
+    plt.plot(forecast_months, predicted_values, label='Tahmin De?erleri', marker='x')
+    plt.title(f"{station_code} için Gerçek ve Tahmin De?erleri")
+    plt.xlabel("Tarih")
+    plt.ylabel("De?er")
+    plt.legend()
+    plt.grid()
+    plt.show()
 
 
+# Örnek olarak belirli bir istasyon kodu seçme
+station_code_to_plot = '321430'  # Buraya istedi?iniz istasyon kodunu yaz?n
+plot_forecast(station_code_to_plot)
 
 
-
-#######################################################
-# all data normalize
-###########################################################
-
-# Tüm verileri birle?tiriyoruz
-all_data = pd.concat(monthly_dict_85to21.values(), axis=0)
-
-# Tek bir scaler kullanarak normalize ediyoruz
-scaler = MinMaxScaler()
-normalized_all_data = pd.DataFrame(scaler.fit_transform(all_data), index=all_data.index, columns=all_data.columns)
-
-# Normalized edilmi? veriyi her bir aya geri bölüyoruz
-normalized_dataframes_eda = {}
-start_idx = 0
-for month, df in monthly_dict_85to21.items():
-    end_idx = start_idx + len(df)
-    normalized_dataframes_eda[month] = normalized_all_data.iloc[start_idx:end_idx]
-    start_idx = end_idx
-
-
-
-lookback = 36  # Modelin bakaca?? geçmi? ay say?s?
-test_size = 24  # Tahmin edilecek 24 ay
-batch_size = 256  # Bir seferde i?lenecek veri miktar?
-
-X_train, y_train = [], []
-X_test, y_test = [], []
-
-# Her istasyon verisini e?itim ve test olarak ay?r?yoruz
-for month, df in normalized_dataframes_eda.items():
-    values = df.values  # DataFrame'i numpy array'e çeviriyoruz
-
-    # E?itim verisi: lookback ve test_size d???nda kalan veriler
-    num_samples = len(values) - lookback - test_size
-    for start in range(0, num_samples, batch_size):
-        end = min(start + batch_size, num_samples)
-        X_train_batch = np.array([values[i:i + lookback] for i in range(start, end)])
-        y_train_batch = np.array([values[i + lookback:i + lookback + test_size, 0] for i in range(start, end)])
-
-        # X_train ve y_train listesine batch'leri ekleme
-        X_train.append(X_train_batch)
-        y_train.append(y_train_batch)
-
-    # Test verisi: Son 12 ay ve test verisi
-    X_test.append(values[-(lookback + test_size):-test_size])  # Son 12 ayl?k geçmi? veriyi al?yoruz
-    y_test.append(values[-test_size:, 0])  # Sonraki 24 ay?n target verisi
-
-# X_train ve y_train'i numpy array'lere çeviriyoruz (batch'ler halinde)
-X_train = np.concatenate(X_train, axis=0)
-y_train = np.concatenate(y_train, axis=0)
-X_test = np.array(X_test)
-y_test = np.array(y_test)
-
-# E?itim ve test verilerinin ?ekillerini kontrol edelim
-print("X_train shape:", X_train.shape)
-print("y_train shape:", y_train.shape)
-print("X_test shape:", X_test.shape)
-print("y_test shape:", y_test.shape)
-
-
-num_features = X_train.shape[2]  # Kaç özellik (sütun) var?
-num_units = 30  # LSTM hücre say?s?
-
-model = Sequential()
-model.add(LSTM(num_units, input_shape=(lookback, num_features), return_sequences=True))
-model.add(Dropout(0.2))  # Overfitting'i önlemek için
-model.add(LSTM(num_units, return_sequences=False))
-model.add(Dropout(0.2))
-model.add(Dense(24))  # 24 ayl?k tahmin
-
-model.compile(optimizer='adam', loss='mse')
-
-# Early stopping: Do?rulama kayb? 5 dönem boyunca iyile?mezse e?itim duracak
-early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
-
-
-import time
-
-# E?itim süresini ölçelim
-start_time = time.time()
-# Modeli e?itme
-history = model.fit(X_train, y_train, epochs=10, batch_size=64, validation_split=0.1, callbacks=[early_stopping])
-
-end_time = time.time()
-
-print(f"Training took {end_time - start_time} seconds")
-
-# Test verisi üzerinde tahmin yapma
-predictions = model.predict(X_test)
-
-# Tahmin sonuçlar? ve gerçek sonuçlar? inceleme
-print("Tahmin edilen de?erler: ", predictions[0:5])
-print("Gerçek test de?erleri: ", y_test[0:5])
-
-# gerçek de?erleri ile görselle?tirme:
-
-y_test_rescaled = []
-predictions_rescaled = []
-
-# Her bir istasyon için geri ölçeklendirme i?lemi
-for i in range(len(X_test)):
-    # Sadece 'Target' sütunu üzerinden geri ölçeklendirme yap?yoruz
-    y_test_with_fake_columns = np.zeros((len(y_test[i]), X_train.shape[2]))
-    y_test_with_fake_columns[:, -1] = y_test[i].reshape(-1)
-
-    predictions_with_fake_columns = np.zeros((len(predictions[i]), X_train.shape[2]))
-    predictions_with_fake_columns[:, -1] = predictions[i].reshape(-1)
-
-    # Geri ölçeklendirme
-    y_test_rescaled.append(scaler.inverse_transform(y_test_with_fake_columns)[:, -1])
-    predictions_rescaled.append(scaler.inverse_transform(predictions_with_fake_columns)[:, -1])
-
-
-# Örnek bir istasyon (station_index) için tahmin ve gerçek de?erlerin grafi?ini çizelim
-station_index = 400
-
-# Zaman aral??? (24 ay)
-time_range = np.arange(1, len(y_test_rescaled[station_index]) + 1)
-
-# Grafik olu?turma
-plt.figure(figsize=(10, 6))
-plt.plot(time_range, y_test_rescaled[station_index], label='Gerçek De?erler', marker='o')
-plt.plot(time_range, predictions_rescaled[station_index], label='Tahmin Edilen De?erler', marker='x')
-plt.title(f'?stasyon {station_index} için Gerçek ve Tahmin Edilen De?erler (Orijinal Ölçek)')
-plt.xlabel('Ay')
-plt.ylabel('Yer Alt? Su Yüksekli?i')
-plt.legend()
-plt.grid(True)
-plt.show()
-
-smape_value1 = smape(y_test_rescaled, predictions_rescaled)
-print(f"SMAPE: {smape_value1}")
-
-smape_value2 = smape(y_test, predictions)
-print(f"SMAPE: {smape_value2}")
