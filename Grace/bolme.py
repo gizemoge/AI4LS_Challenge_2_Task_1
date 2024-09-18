@@ -147,6 +147,8 @@ merged_df
 ########################################################################################################################
 # kar??la?t?rma:
 ########################################################################################################################
+import xarray as xr
+import pandas as pd
 ds_land = xr.open_dataset('Grace/datasets/(3)CSR_GRACE_GRACE-FO_RL06_Mascons_v02_LandMask.nc')
 df_land = ds_land['LO_val'].to_dataframe().reset_index()
 

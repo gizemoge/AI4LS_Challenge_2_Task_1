@@ -219,42 +219,6 @@ with open("Grace/pkl_files/monthly_gldas_dict_filtered_float16.pkl", "rb") as f:
     gldas_dict = pickle.load(f)
 
 
-########################################################################################################################
-# 2. ESGF
-########################################################################################################################
-
-ds2014 = xr.open_dataset('Grace/datasets/tas_Amon_GISS-E2-1-G_historical_r1i1p5f1_gn_200101-201412.nc')
-
-ds2014.variables
-ds2014.info()
-ds2014.data_vars
-# S?cakl?k verilerine eri?in
-
-tas_df_2014 = ds2014['tas'].to_dataframe().reset_index()
-tas_df_2014.isnull().sum()
-
-tas_df_2014.head()
-tas_df_2014["time"].value_counts()
-tas_df_2014[tas_df_2014["lat"] < -88]
-
-tas_df_2014.shape
-
-
-tas_df_2014_changes = tas_df_2014[tas_df_2014['lat'] != tas_df_2014['lat'].shift()]
-tas_df_2014_changes.head()
-
-
-##############################################################
-
-ds = xr.open_dataset('Grace/datasets/tas_Amon_IPSL-CM6A-LR_dcppA-hindcast_s2014-r6i1p1f1_gr_201501-202412.nc')
-
-ds.variables
-ds.data_vars
-ds.info()
-df_2024 = ds["tas"].to_dataframe().reset_index()
-df_2024.head(20)
-df_2024.tail()
-df_2024.shape # (2471040, 5)
 
 
 ########################################################################################################################
@@ -280,49 +244,6 @@ with open("Grace/pkl_files/monthly_gldas_dict_filtered_float16.pkl", "rb") as f:
 
 gldas_dict.keys()
 gldas_dict["200204"].head()
-
-########################################################################################################################
-# AIR TEMPARATURE
-########################################################################################################################
-
-data = xr.open_dataset("Grace/datasets/air.mon.mean.nc")
-
-data.info()
-data.data_vars
-
-df_air = data["air"].to_dataframe().reset_index()
-df_air.head()
-df_air.isnull().sum()
-df_air.shape
-
-df_air = df_air[df_air['time'] >= '2002-04-01'].reset_index()
-df_air.drop('index', inplace=True, axis=1)
-df_air.shape
-
-
-df_air['lat'] = df_air['lat'].astype('float16')
-df_air['lon'] = df_air['lon'].astype('float16')
-df_air['air'] = df_air['air'].astype('float16')
-
-
-
-df_air.shape
-df_air.info()
-df_air.head()
-df_air.isnull().sum()
-# 'air' sütunu NaN olan satırları sil ve indeksleri sıfırla
-df_air = df_air.dropna(subset=['air']).reset_index(drop=True)
-df_air.to_pickle('Grace/pkl_files/df_air.pkl')
-
-
-df_air = pd.read_pickle("Grace/pkl_files/df_air.pkl")
-
-df_air.info()
-df_air.head(30)
-df_air.tail()
-
-df_air.describe()
-df_air.isnull().sum()
 
 ########################################################################################################################
 # 3. GLDAS 2: CATCHMENT
