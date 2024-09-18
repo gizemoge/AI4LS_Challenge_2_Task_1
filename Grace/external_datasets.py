@@ -4,8 +4,6 @@
 
 import xarray as xr
 import requests
-from requests.auth import HTTPBasicAuth
-from urllib.parse import urlparse
 import os
 import pickle
 import re
@@ -82,9 +80,11 @@ list(ds_dict.keys())[-5:]
 with open(os.path.join('Grace', 'pkl_files', 'gldas_dict.pkl'), 'wb') as f:
     pickle.dump(ds_dict, f)
 
-
 # 1.2. Process data
 # 1.2.1. Process land mask to apply to all datasets
+ds_land = xr.open_dataset('Grace/datasets/(3)CSR_GRACE_GRACE-FO_RL06_Mascons_v02_LandMask.nc')
+df_land = ds_land['LO_val'].to_dataframe().reset_index()
+
 df_land["lat"].describe()
 df_land_scaled = df_land[df_land["lat"] >= -59.875]
 
@@ -106,7 +106,7 @@ for key, value in ds_dict.items():
         feature_df = data_array.to_dataframe().reset_index().drop("time", axis=1)
         # Match lat and lon with df_land
         feature_df["lat"] = feature_df["lat"].astype("float32")
-        feature_df["lon"] = feature_df["lon"].apply(lambda val: val if val < 180 else val - 360).astype("float32")
+        feature_df["lon"] = feature_df["lon"].apply(lambda val: val if val > 0 else val + 360).astype("float32")
 
         if df.empty:
             df = feature_df
@@ -118,8 +118,8 @@ for key, value in ds_dict.items():
     df_filtered = df[df['land_mask'] == 1]
     df_filtered = df_filtered.drop("land_mask", axis=1)
 
-    df_filtered['lat'] = df_filtered['lat'].astype('float16')
-    df_filtered['lon'] = df_filtered['lon'].astype('float16')
+    #df_filtered['lat'] = df_filtered['lat'].astype('float16')
+    #df_filtered['lon'] = df_filtered['lon'].astype('float16')
 
     # Store the filtered DataFrame in swe_dict
     monthly_gldas_dict[key] = df_filtered.reset_index(drop=True)
@@ -495,5 +495,71 @@ combined_gldas_monthly.keys()
 combined_gldas_monthly = dict(sorted(combined_gldas_monthly.items()))
 combined_gldas_monthly["200204"].head()
 
+import dill
+with open('Grace/pkl_files/combined_gldas_monthly_filtered_float16.dill', 'wb') as f:
+    dill.dump(combined_gldas_monthly, f)
+
 with open('Grace/pkl_files/combined_gldas_monthly_filtered_float16.pkl', 'wb') as f:
     pickle.dump(combined_gldas_monthly, f)
+
+
+#########
+# trying to avoid lazy index
+
+import pandas as pd
+
+# Iterate through each key-value pair in combined_gldas_monthly
+for key, value in combined_gldas_monthly.items():
+    # Check if the value is an xarray Dataset or DataArray (potentially lazy)
+    if isinstance(value, (xr.Dataset, xr.DataArray)):
+        # Force the lazy array to load fully into memory
+        combined_gldas_monthly[key] = value.load()  # or .compute() if using dask-backed arrays
+
+    # If the value is a pandas DataFrame (which should not be lazy), just ensure it's valid
+    elif isinstance(value, pd.DataFrame):
+        # Perform any checks or operations needed on the DataFrame
+        pass  # No action needed if it's a fully loaded DataFrame
+    else:
+        print(f"Unexpected type for key {key}: {type(value)}")
+
+#########
+with open("Grace/pkl_files/monthly_gldas_dict.pkl", "rb") as f:
+    monthly_gldas_dict = pickle.load(f)
+
+monthly_gldas_dict["200204"].head()
+
+df_lat_lon = monthly_gldas_dict["200204"][['lat', 'lon']]
+df_lat_lon.head()
+
+
+# harita kodu
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# Assuming df_lat_lon is already defined with 'lat' and 'lon' columns
+# Example DataFrame creation for demonstration (remove this if df_lat_lon is already defined)
+# df_lat_lon = pd.DataFrame({
+#     'lat': [-34.0, 0.0, 40.0, 81.0],
+#     'lon': [-175.0, -170.0, -60.0, 172.0]
+# })
+
+# Create scatter plot
+plt.figure(figsize=(12, 6))
+plt.scatter(df_lat_lon['lon'], df_lat_lon['lat'], alpha=0.7, c='blue', marker='o', s=1)
+
+# Set labels and title
+plt.title('Scatter Plot of Latitude and Longitude')
+plt.xlabel('Longitude')
+plt.ylabel('Latitude')
+
+# Set x and y limits based on your data ranges
+plt.xlim(-180, 180)  # Longitude range
+plt.ylim(-90, 90)    # Latitude range
+
+# Show grid for better readability
+plt.grid(True)
+
+# Display the plot
+plt.axhline(0, color='black', lw=0.5)  # Add horizontal line at y=0 (Equator)
+plt.axvline(0, color='black', lw=0.5)  # Add vertical line at x=0 (Prime Meridian)
+plt.show()
