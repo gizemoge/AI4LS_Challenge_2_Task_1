@@ -10,7 +10,7 @@ import os
 import pickle
 import re
 import numpy as np
-import modin.pandas as pd
+import pandas as pd
 from collections import OrderedDict
 
 pd.set_option('display.max_columns', None)
@@ -25,9 +25,9 @@ pd.set_option('display.width', 500)
 ########################################################################################################################
 
 """
-The short names with extension “_tavg” are backward 3-hour averaged variables.
-The short names with extension “_acc” are backward 3-hour accumulated variables.
-The short names with extension “_inst” are instantaneous variables.
+The short names with extension ï¿½_tavgï¿½ are backward 3-hour averaged variables.
+The short names with extension ï¿½_accï¿½ are backward 3-hour accumulated variables.
+The short names with extension ï¿½_instï¿½ are instantaneous variables.
 """
 
 # 1.1. Fetch data
@@ -233,7 +233,7 @@ ds2014.data_vars
 # S?cakl?k verilerine eri?in
 
 tas_df_2014 = ds2014['tas'].to_dataframe().reset_index()
-
+tas_df_2014.isnull().sum()
 
 tas_df_2014.head()
 tas_df_2014["time"].value_counts()
@@ -283,6 +283,46 @@ with open("Grace/pkl_files/monthly_gldas_dict_filtered_float16.pkl", "rb") as f:
 gldas_dict.keys()
 gldas_dict["200204"].head()
 
+########################################################################################################################
+# AIR TEMPARATURE
+########################################################################################################################
+
+data = xr.open_dataset("Grace/datasets/air.mon.mean.nc")
+
+data.info()
+data.data_vars
+
+df_air = data["air"].to_dataframe().reset_index()
+df_air.head()
+df_air.isnull().sum()
+df_air.shape
+
+df_air = df_air[df_air['time'] >= '2002-04-01'].reset_index()
+df_air.drop('index', inplace=True, axis=1)
+df_air.shape
 
 
+df_air['lat'] = df_air['lat'].astype('float16')
+df_air['lon'] = df_air['lon'].astype('float16')
+df_air['air'] = df_air['air'].astype('float16')
 
+
+df_air.shape
+df_air.info()
+df_air.head()
+df_air.isnull().sum()
+
+# 'air' sÃ¼tunu NaN olan satÄ±rlarÄ± sil ve indeksleri sÄ±fÄ±rla
+df_air = df_air.dropna(subset=['air']).reset_index(drop=True)
+
+df_air.to_pickle('Grace/pkl_files/df_air.pkl')
+
+
+df_air = pd.read_pickle("Grace/pkl_files/df_air.pkl")
+
+df_air.info()
+df_air.head(30)
+df_air.tail()
+
+df_air.describe()
+df_air.isnull().sum()
