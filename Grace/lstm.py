@@ -111,7 +111,7 @@ with open('filtered_combined_monthly_data.pkl', 'wb') as file:
 # ?MGw: Yeralt? suyu depolama de?i?imini (terajoule)
 # ?MSw: Yüzey suyu depolama de?i?imini (terajoule)
 #      bunlar için Eda'n?n önerileri:
-#               MSw = (Rainf_f_tavg + Snowf_tavg + Qsm_acc + Qsb_acc) - (Evap_tavg + Qs_acc)
+#               MSw = (Rainf_f_tavg + Qsb_acc) - (Evap_tavg + Qs_acc)
 #               deltaTWS = ["lwe_thickness"]
 #               MSN = SWE_inst
 
@@ -127,7 +127,7 @@ for month, df in monthly_combined_dfs.items():
     df['Qsm_acc'] = df['Qsm_acc'] * 8 * 30
     df['Qs_acc'] = df['Qsc_acc'] * 8 * 30
     df['Qsb_acc'] = df['Qsb_acc'] * 8 * 30
-    df['MSw'] = (df['Rainf_f_tavg_m'] + df['Snowf_tavg_m'] + df['Qsm_acc'] -
+    df['MSw'] = (df['Rainf_f_tavg_m']  -
                  (df['Evap_tavg_m'] +  df['Qs_acc'] + df['Qsb_acc']))
     df.rename(columns={'lwe_thickness': 'deltaTWS'}, inplace=True)
     df['MSM'] = (df["SoilMoi0_10cm_inst"] + df["SoilMoi10_40cm_inst"] + df["SoilMoi40_100cm_inst"] +
