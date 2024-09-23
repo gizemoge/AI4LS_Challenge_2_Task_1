@@ -89,16 +89,13 @@ if all_same:
 else:
     print("Hay?r")
 
-
 # Intersection of latitude and longitude couples that come from Gldas and GRACE datasets.
 intersection_set = first_month_coords.intersection(coordinates_per_df[0])
-
 
 # Editing the coordinates in GLDAS according to the intersection set.
 # Filtrelenmi? DataFrame'leri saklayacak bir sözlük olu?turuyoruz
 filtered_dfs = {}
 
-# Her bir DataFrame için filtreleme i?lemi
 for key, df in monthly_gldas.items():
     # DataFrame'deki (lat, lon) sütunlar?na göre tuple olu?turuyoruz
     df['coord_tuple'] = list(zip(df['lat'], df['lon']))
@@ -107,17 +104,17 @@ for key, df in monthly_gldas.items():
     filtered_df = df[df['coord_tuple'].apply(lambda x: x in intersection_set)]
 
     # Filtrelenmi? DataFrame'i yeni sözlü?e ekliyoruz
-    filtered_dfs[key] = filtered_df
+    filtered_dfs[key] = filtered_df.drop(columns=['coord_tuple'], inplace=True)
 
-    # 'coord_tuple' sütununu kald?r?yoruz (filtre i?lemi bitti?i için gerek kalmad?)
-    filtered_dfs[key].drop(columns=['coord_tuple'], inplace=True)
-
-monthly_gldas_edited = filtered_dfs.copy()
-
-for key, df in monthly_gldas_edited.items():
+for key, df in filtered_dfs.items():
     df.reset_index(drop=True, inplace=True)
 
+with open("Grace/pkl_files/gldas_dict_2010_2024.pkl", "wb") as f:
+    pickle.dump(filtered_dfs, f)
 
+
+
+# GRACE filtreleme, nan doldurma, sözlük yapma
 # Editing the coordinates in GRACE according to the intersection set.
 df = df[df[['lat', 'lon']].apply(tuple, axis=1).isin(intersection_set)]
 
@@ -202,4 +199,104 @@ with open('Grace/pkl_files/grace_imputed_in_dict.pkl', 'wb') as f:
     pickle.dump(result_dict, f)
 
 
-# todo grace 2024 nisan sonras?n? droplaman?z gerek sözlükte
+# Merging Gldas and GRACE datasets
+with open("Grace/pkl_files/gldas_dict_2010_2024.pkl", "rb") as f:
+    gldas_dict_2010_2024 = pickle.load(f)
+
+with open("Grace/pkl_files/grace_imputed_in_dict.pkl", "rb") as f:
+    grace_dict = pickle.load(f)
+
+with open("Grace/pkl_files/gldas_dict_2004_2009.pkl", "rb") as f:
+    gldas_dict_2004_2009 = pickle.load(f)
+
+
+# Merging Grace and Gladas
+for key in gldas_dict_2010_2024.keys():
+    # GLDAS ve GRACE verilerinin o aya ait DataFrame'lerini al
+    gldas_df = gldas_dict_2010_2024[key]
+    grace_df = grace_dict[key]
+
+    if grace_df is not None:
+        # GLDAS ve GRACE DataFrame'lerini lat ve lon sütunlar?na göre birle?tir (inner join)
+        merged_df = gldas_df.merge(grace_df[['lat', 'lon', 'lwe_thickness']], on=['lat', 'lon'], how='inner')
+
+        # Birle?tirilmi? DataFrame'i GLDAS dict'ine geri koy
+        gldas_dict_2010_2024[key] = merged_df
+
+
+# Veriyi 209 sat?rda bire dü?ürme fonksiyonu
+def reduce_to_first_of_209(df):
+    return df.iloc[::209, :]  # Her 209 sat?rdan birini (ilk sat?r?) al
+
+
+def convert_cols(df, input_col):
+    # Sütunun tipini anlamak için son k?sm? kontrol etme ('_tavg' veya '_acc')
+    col_type = input_col.split("_")[-1]  # f-string hatas? düzeltildi
+
+    # E?er sütun '_tavg' ile bitiyorsa, özel formül uygulay?n
+    if col_type == "tavg":
+        df[f"new_{input_col}"] = df[input_col] * 10800 * 8 * 30
+        df.drop(input_col, axis=1, inplace=True)  # Eski sütunu kald?r
+    # E?er sütun '_acc' ile bitiyorsa, farkl? bir formül uygulay?n
+    elif col_type == "acc":
+        df[f"new_{input_col}"] = df[input_col] * 8 * 30
+        df.drop(input_col, axis=1, inplace=True)  # Eski sütunu kald?r
+
+
+
+def process_data(dict):
+    results_dict = {}
+
+    for key, df in dict.items():
+        # Her 209 sat?rdan birini al ve küçültülmü? DataFrame'i results_dict'e ekle
+        results_dict[key] = reduce_to_first_of_209(df)
+        results_dict[key].reset_index(drop=True, inplace=True)
+
+    for month, df in results_dict.items():
+        for col in df.columns:
+            # Sadece '_tavg' veya '_acc' içeren sütunlar? dönü?tür
+            if "_tavg" in col or "_acc" in col:
+                convert_cols(df, col)
+
+        # Yeni hesaplamalar yaparak sütunlar? ekleyin
+        try:
+            df['MSW'] = (df['new_Rainf_f_tavg'] + df['new_Qsb_acc']) - (df['new_Evap_tavg'] - df['new_ESoil_tavg'] + df['new_Qs_acc'])
+        except KeyError as e:
+            print(f"KeyError: {e}. Bu sütun eksik olabilir.")
+
+        df.rename(columns={'SWE_inst': 'MSN'}, inplace=True)
+        if 'lwe_thickness' in df.columns:
+            df.rename(columns={'lwe_thickness': 'deltaTWS'}, inplace=True)
+
+        # Toprak nemi ve s?cakl?k ortalamalar?n? hesaplay?n
+        df['MSM'] = (df["SoilMoi0_10cm_inst"] + df["SoilMoi10_40cm_inst"] + df["SoilMoi40_100cm_inst"] +
+                     df["SoilMoi100_200cm_inst"])
+
+        df['SoilTMP0_avg'] = (df['SoilTMP0_10cm_inst'] + df['SoilTMP10_40cm_inst'] + df['SoilTMP40_100cm_inst'] +
+                              df['SoilTMP100_200cm_inst'])
+
+        # Kullan?lmayan sütunlar? kald?r?n
+        cols_to_drop = ['SoilMoi0_10cm_inst', 'SoilMoi10_40cm_inst', 'SoilMoi40_100cm_inst', 'SoilMoi100_200cm_inst',
+                        'SoilTMP0_10cm_inst', 'SoilTMP10_40cm_inst', 'SoilTMP40_100cm_inst', 'SoilTMP100_200cm_inst']
+        df.drop(cols_to_drop, axis=1, inplace=True)
+
+        # Güncellenmi? DataFrame'i sözlü?e geri yaz
+        results_dict[month] = df
+
+    return results_dict
+
+
+results_dict_2010_2024 = process_data(gldas_dict_2010_2024)
+results_dict_2004_2009 = process_data(gldas_dict_2004_2009)
+
+
+with open('Grace/pkl_files/results_dict_2010_2024.pkl', 'wb') as file:
+    pickle.dump(results_dict_2010_2024, file)
+
+with open('Grace/pkl_files/results_dict_2004_2009.pkl', 'wb') as file:
+    pickle.dump(results_dict_2004_2009, file)
+
+
+# gldas2004-2009 daki 'MSW', 'MSM', 'MSN ortalamalar?n? hesapla:
+
+# deliricem art?k yether
