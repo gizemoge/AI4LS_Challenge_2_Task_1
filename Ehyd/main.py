@@ -800,6 +800,51 @@ station_code_to_plot = '321430'  # Buraya istedi?iniz istasyon kodunu yaz?n
 plot_forecast(station_code_to_plot)
 
 
+############################## Forecasting
+
+with open(os.path.join('Ehyd', 'pkl_files', 'monthly_dict_85to21.pkl'), 'rb') as file:
+    monthly_dict_85to21 = pickle.load(file)
+
+monthly_dict_final_train = monthly_dict_85to21.copy()
+
+monthly_dict_final_train = {k: v for k, v in monthly_dict_final_train.items() if k >= "2000_01"}
+
+final_data = pd.concat([df for df in monthly_dict_final_train.values()])
+
+# Her istasyon için 26 ayl?k tahmin yapma
+forecasts_final = {}
+for station in final_data.index.unique():
+    # ?stasyon verilerini al
+    station_data = final_data.loc[station]
+
+    # Modeli olu?turma ve e?itme
+    model = SARIMAX(
+        station_data['Values'],  # Hedef de?i?ken
+        exog=station_data.drop(columns=['Values']),  # Di?er özellikler
+        order=(1, 0, 1),  # ARIMA parametreleri
+        seasonal_order=(0, 1, 1, 12)  # Mevsimsel ARIMA parametreleri
+    )
+    model_fit = model.fit(disp=False)
+
+    # 26 ayl?k tahmin yap
+    forecast = model_fit.get_forecast(steps=26, exog=station_data.drop(columns=['Values']).values[
+                                                     -26:])  # Son 24 ay?n exog de?erleri
+    forecast_values = forecast.predicted_mean
+
+    # Tahmin sonuçlar?n? sakla
+    forecasts_final[station] = forecast_values
+
+# Tahmin sonuçlar?n? DataFrame'e ekleme
+forecast_final_df = pd.DataFrame(forecasts_final)
+forecast_final_df.columns = [f'forecast_month_{i + 1}' for i in range(26)]
+
+# Sonuçlar? yazd?rma
+print(forecast_final_df)
+
+
+
+
+
 ######################### eda
 with open(os.path.join('Ehyd', 'pkl_files', 'monthly_dict_85to21.pkl'), 'rb') as file:
     monthly_dict_85to21 = pickle.load(file)
