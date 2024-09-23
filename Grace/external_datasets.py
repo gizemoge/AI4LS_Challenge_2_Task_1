@@ -75,8 +75,7 @@ for key, value in ds_dict.items():
         data_array = value[feature]
         feature_df = data_array.to_dataframe().reset_index().drop("time", axis=1)
         feature_df = feature_df.dropna(subset=[f"{feature}"])
-        # duplicate_rows_df = feature_df[feature_df.duplicated(subset=["lat", "lon"], keep=False)]
-        # print(duplicate_rows_df.shape)
+
 
         if df.empty:
             df = feature_df
@@ -150,5 +149,5 @@ for key, value in ds_dict.items():
     monthly_gldas_dict[key] = df.reset_index(drop=True)
 
 
-with open('Grace/pkl_files/gldas_dict_1809.pkl', 'wb') as f:
+with open('Grace/pkl_files/gldas_dict_2010_2024.pkl', 'wb') as f:
     pickle.dump(monthly_gldas_dict, f)

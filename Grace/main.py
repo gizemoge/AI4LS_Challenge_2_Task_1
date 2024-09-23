@@ -73,35 +73,12 @@ else:
 
 
 # gladas verisini açma
-with open('Grace/pkl_files/gldas_dict_1809.pkl', 'rb') as file:
+with open('Grace/pkl_files/gldas_dict_2010_2024.pkl', 'rb') as file:
     monthly_gldas = pickle.load(file)
-
-
-ds = monthly_gldas["201001"]
-variables = list(ds.data_vars)[1:]
-monthly_gldas_edited = {}
-
-for key, value in monthly_gldas.items():
-    df = pd.DataFrame()
-
-    for feature in variables:
-        data_array = value[feature]
-        feature_df = data_array.to_dataframe().reset_index().drop("time", axis=1)
-        feature_df = feature_df.dropna(subset=[f"{feature}"])
-        #duplicate_rows_df = feature_df[feature_df.duplicated(subset=["lat", "lon"], keep=False)]
-        #print(duplicate_rows_df.shape)
-
-        if df.empty:
-            df = feature_df
-        else:
-            df = df.merge(feature_df, on=["lat", "lon"])
-
-    monthly_gldas_edited[key] = df.reset_index(drop=True)
-
 
 # Gldas'taki tüm aylara ait koordinatlar ayn? m? Evet
 # Her bir DataFrame içindeki lat-lon çiftlerini toplay?p bir set'e ekleme
-coordinates_per_df = [set(zip(df['lat'], df['lon'])) for df in monthly_gldas_edited.values()]
+coordinates_per_df = [set(zip(df['lat'], df['lon'])) for df in monthly_gldas.values()]
 
 # ?lk seti referans alarak di?er setler ile kar??la?t?rma
 all_same = all(coords == coordinates_per_df[0] for coords in coordinates_per_df)
@@ -122,7 +99,7 @@ intersection_set = first_month_coords.intersection(coordinates_per_df[0])
 filtered_dfs = {}
 
 # Her bir DataFrame için filtreleme i?lemi
-for key, df in monthly_gldas_edited.items():
+for key, df in monthly_gldas.items():
     # DataFrame'deki (lat, lon) sütunlar?na göre tuple olu?turuyoruz
     df['coord_tuple'] = list(zip(df['lat'], df['lon']))
 
@@ -195,9 +172,6 @@ for key, value in result_dict.items():
 
 
 # Imputing NaN Values
-
-
-
 # NaN de?erleri doldurmak için
 for month_key, month_df in result_dict.items():
     # Anahtar?n ay k?sm?n? al
