@@ -201,3 +201,6 @@ for month_key, month_df in result_dict.items():
 with open('Grace/pkl_files/grace_imputed_in_dict.pkl', 'wb') as f:
     pickle.dump(result_dict, f)
 
+
+
+# todo grace 2024 nisan sonras?n? droplaman?z gerek sözlükte
