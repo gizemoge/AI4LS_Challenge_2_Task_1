@@ -1,12 +1,11 @@
-import xarray as xr
-import requests
+
 import os
 import pickle
-import re
+
 import numpy as np
-import modin.pandas as pd
+import pandas as pd
 import matplotlib.pyplot as plt
-import tensorflow as tf
+
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense
 from sklearn.inspection import permutation_importance
@@ -57,6 +56,8 @@ with open("Grace/pkl_files/monthly_gldas_dict_filtered_float16.pkl", "rb") as f:
 with open("Grace/pkl_files/grace_monthly_dfs.pkl", "rb") as f:
     grace_dict = pickle.load(f)
 
+# todo grace boylam?n? gldas format?na getir
+
 # ?stenilen tarih aral???n? belirleme
 start_date = pd.to_datetime('2010-01-01')
 end_date = pd.to_datetime('2024-04-01')
@@ -98,6 +99,9 @@ with open('filtered_combined_monthly_data.pkl', 'wb') as file:
 ########################################################################################################################
 
 #                ?MGw = ?TWS - ?MSM - ?MSN - ?MSw
+#       Evap_tavg (April){kg/m2} = Evap_tavg (April){kg/m2/sec} * 10800{sec/3hr} * 8{3hr/day} * 30{days}
+#                   Qs_acc (April){kg/m2} = Qs_acc (April){kg/m2/3hr} * 8{3hr/day} * 30{days}
+
 #
 # Bu formülde,
 #
@@ -107,31 +111,33 @@ with open('filtered_combined_monthly_data.pkl', 'wb') as file:
 # ?MGw: Yeralt? suyu depolama de?i?imini (terajoule)
 # ?MSw: Yüzey suyu depolama de?i?imini (terajoule)
 #      bunlar için Eda'n?n önerileri:
-#               MSw = (Rainf_f_tavg + Snowf_tavg + Qsm_acc) - (Evap_tavg + ECanop_tavg + Qsc_acc + Qsb_acc)
-#               MSM = Avg["SoilMoi0_10cm_inst","SoilMoi10_40cm_inst", "SoilMoi40_100cm_inst", "SoilMoi100_200cm_inst"]
-#               ?TWS = ["lwe_thickness"]
-#               MSN = SWE_inst  ?
+#               MSw = (Rainf_f_tavg + Snowf_tavg + Qsm_acc + Qsb_acc) - (Evap_tavg + Qs_acc)
+#               deltaTWS = ["lwe_thickness"]
+#               MSN = SWE_inst
 
 
-# her?eyi m/gün yapmak?
-soil_moisture_columns = ["SoilMoi0_10cm_inst","SoilMoi10_40cm_inst", "SoilMoi40_100cm_inst", "SoilMoi100_200cm_inst"]
+#
+
 # Sözlükteki her bir DataFrame için döngü
 for month, df in monthly_combined_dfs.items():
     # Hesaplamay? ad?m ad?m kontrol et
-    df['Rainf_f_tavg_m'] = df['Rainf_f_tavg'] * 1000
-    df['Snowf_tavg_m'] = df['Snowf_tavg'] * 1000
-    df['Evap_tavg_m'] = df['Evap_tavg'] * 1000 / (1000 * 9.81)
-    df['ECanop_tavg_m'] = df['ECanop_tavg'] * 1000 / (1000 * 9.81)
+    df['Rainf_f_tavg_m'] = df['Rainf_f_tavg'] * 10800 * 8 * 30
+    df['Snowf_tavg_m'] = df['Snowf_tavg'] * 10800 * 8 * 30
+    df['Evap_tavg_m'] = df['Evap_tavg'] *  10800 * 8 * 30
+    df['Qsm_acc'] = df['Qsm_acc'] * 8 * 30
+    df['Qs_acc'] = df['Qsc_acc'] * 8 * 30
+    df['Qsb_acc'] = df['Qsb_acc'] * 8 * 30
     df['MSw'] = (df['Rainf_f_tavg_m'] + df['Snowf_tavg_m'] + df['Qsm_acc'] -
-                 (df['Evap_tavg_m'] + df['ECanop_tavg_m'] + df['Qsc_acc'] + df['Qsb_acc']))
+                 (df['Evap_tavg_m'] +  df['Qs_acc'] + df['Qsb_acc']))
     df.rename(columns={'lwe_thickness': 'deltaTWS'}, inplace=True)
-    df['MSM'] = df[soil_moisture_columns].apply(lambda x: (x * 0.01).mean(), axis=1)
-    # df['MSN'] = df['SWE_inst'] ?
+    df['MSM'] = (df["SoilMoi0_10cm_inst"] + df["SoilMoi10_40cm_inst"] + df["SoilMoi40_100cm_inst"] +
+                 df["SoilMoi100_200cm_inst"])
+    df['MSN'] = df['SWE_inst']
     # Güncellenmi? DataFrame'i sözlü?e geri yaz (iste?e ba?l?)
     monthly_combined_dfs[month] = df
 
 ########################################################################################################################
-# 4. EKLED???M?Z FEATURELARIN ? OLMASINI SA?LAMAK
+# 4. EKLED???M?Z FEATURELARIN DELTA OLMASINI SA?LAMAK
 ########################################################################################################################
 
 # Her bir DataFrame için i?lem yap?lacak döngü
@@ -142,7 +148,7 @@ for month, df in monthly_combined_dfs.items():
     # 2004-2009 y?llar? aras?ndaki verileri filtreleme
     filtered_df = df[(df['time'].dt.year >= 2004) & (df['time'].dt.year <= 2009)]
 
-    # Her ay için ortalamalar? hesaplama (Ocak, ?ubat, Mart... ?eklinde 12 ay için)
+    # Her ay için ortalamalar? hesaplama (Ocak, ?ubat, Mart... ?eklinde 12 ay için) bu yanl?? her ay için ortalama de?il tek bir ort kullancaz!!!
     monthly_avg = filtered_df.groupby(filtered_df['time'].dt.month)[['MSM', 'MSN', 'MSw']].mean()
 
     # Her sat?r?n ait oldu?u ay? bulma

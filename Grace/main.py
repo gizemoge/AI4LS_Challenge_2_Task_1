@@ -1,189 +1,229 @@
-import pandas as pd
+import modin.pandas as pd
 import xarray as xr
-pd.set_option('display.max_columns', None)
-pd.set_option('display.max_rows', None)
-pd.set_option('display.max_colwidth', None)
+import pickle
+import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
+from datetime import datetime, timedelta
 
-###################################################################################################################### 1
-ds = xr.open_dataset('Grace/datasets/(10)CSR_GRACE_GRACE-FO_RL0602_Mascons_all-corrections.nc')
-# ds = dataset
+# Grace verisini açt?k, karalar? filtreledik
+df_land = xr.open_dataset('Grace/datasets/(3)CSR_GRACE_GRACE-FO_RL06_Mascons_v02_LandMask.nc')
+df_land = df_land['LO_val'].to_dataframe().reset_index()
 
-import pprint
-pprint.pprint(ds.attrs)
 
+df_lwe = xr.open_dataset('Grace/datasets/(10)CSR_GRACE_GRACE-FO_RL0602_Mascons_all-corrections.nc')
+df_lwe = df_lwe["lwe_thickness"].to_dataframe().reset_index()
 
-ds.info()
-# ds metadatay? bulunduruyor
-# 4 section var: Dimensions, Coordinates, Data Variables ve Attributes
+# Ayn? sütunu 232 kez tekrar et
+df_land_expanded = pd.concat([df_land['LO_val']] * 232, ignore_index=True)
 
+# E?er sadece LO_val sütunu geni?letilecekse ve df_lwe ile birle?tirilecekse
+df = pd.concat([df_lwe, df_land_expanded], axis=1)
 
-ds.coords
-# Verilerin düzenlenmesi için kullanilan boyutlarin isimleri ve bu boyutlara karsilik gelen degerler.
-# Örnegin, zaman, enlem, boylam gibi koordinatlar olabilir.
-# Baslarinda yildiz var demek, birden çok data variable'?nda kullnailiyor demek.
-# Coordinates:
-#   * time     (time) float32 107.0 129.5 227.5 ... 8.08e+03 8.11e+03 8.141e+03 (time da koordinat olarak say?l?yor)
-#   * lon      (lon) float32 0.125 0.375 0.625 0.875 ... 359.1 359.4 359.6 359.9
-#   * lat      (lat) float32 -89.88 -89.62 -89.38 -89.12 ... 89.38 89.62 89.88
+# land_mask sütunu de?eri 1 olanlar? filtrele
+df = df[df['LO_val'] == 1]
 
-ds.data_vars
-# Data variables:
-#     time_bounds    (time, timebound) float32 ...
-#     lwe_thickness  (time, lat, lon) float32 ...
-# time_bounds: Zaman dilimlerinin sinir bilgilerini içerir ve iki boyutu vardir: zaman ve sinir.
-# lwe_thickness: sivi su esdeger kalinligi verilerini içerir ve üç boyutu vardir: zaman, enlem, ve boylam.
+df.drop("LO_val", axis=1, inplace=True)
+df.reset_index(drop=True, inplace=True)
 
 
-# Her variable'a bu ?ekilde ula??labiliyor:
-time_bounds = ds["time_bounds"]
-lwe_thickness = ds["lwe_thickness"]
+# time k?sm?n? tarih fromat?na geçirdik
+start_date = datetime.strptime('2002-01-01', '%Y-%m-%d')
 
-lwe_thickness.shape  # (232, 720, 1440) 232 zaman diliminde 720 enlem noktasi ve 1440 boylam noktasi içeriyor
-lwe_thickness.mean()
 
+def convert_time_to_date(time_value, start_date):
+    return start_date + timedelta(days=time_value)
 
-# ?lk time index'ini seçmek:
-lwe_thickness[0,:]
+# 'time' de?erlerini tarihe dönü?tür
+df['time'] = df['time'].apply(lambda x: convert_time_to_date(x, start_date))
 
-# Plotting
-lwe_thickness.isel(time=0).plot(size=6)
 
-lwe_thickness.sel(time=slice('107.0','227.5'), lon=slice(20,160), lat=slice(-80,25)).plot(size=6)
+df['lon'] = df['lon'].apply(lambda x: x - 360 if x > 180 else x)
 
-lwe_thickness.sel(time=slice('107.0','227.5')).sel(lat=-27.47, lon=153.03, method='nearest').plot(size=6)
+# time sütununu datetime format?na dönü?tür
+df['time'] = pd.to_datetime(df['time'])
 
+# 2010 y?l?ndan önceki sat?rlar? filtrele ve kald?r
+df = df[df['time'] >= '2010-01-01']
 
+df.reset_index(drop=True, inplace=True)
 
+# time sütunundan sadece tarih k?sm?n? almak
+df['time'] = df['time'].dt.date
 
-##############
-df_lwe = ds['lwe_thickness'].to_dataframe().reset_index()
-df_lwe.head(20)
-df_lwe.shape  # (240537600, 4)
 
-df_lwe["time"].nunique()  # 232
-# Mart 2002'den bu yana toplam 269 ay geçti?
+# koordinatlar kontrol ediliyor her ayda ayn? düzendeler mi diye
+# ?lk ay? referans almak için ilk lat-lon çiftlerini çek
+first_month_coords = set(zip(df[df['time'].dt.to_period('M') == df['time'].dt.to_period('M').iloc[0]]['lat'],
+                             df[df['time'].dt.to_period('M') == df['time'].dt.to_period('M').iloc[0]]['lon']))
 
-# dünyada 90 enlem 180 boylam var
-df_lwe["lat"].nunique()  # 720
-df_lwe["lon"].nunique()  # 1440
-df_lwe["lwe_thickness"].nunique()
+# Her ay? teker teker kontrol etmek
+all_same = True  # Ba?lang?çta ayn? oldu?unu varsay?yoruz
+for year_month, group in df.groupby(df['time'].dt.to_period('M')):
+    coords = set(zip(group['lat'], group['lon']))
+    if coords != first_month_coords:
+        all_same = False
+        break
 
-720/180
-1440/360
-# uydular dünyan?n etraf?nda 8 defa tam tur dönmü? olabilir mi?
+# Sonuç olarak evet veya hay?r yazd?rma
+if all_same:
+    print("Evet")
+else:
+    print("Hay?r")
 
-#########################################################
-# bu noktada bir gruplama yap?p veriyi küçültmeyi deniyoruz
-############################################################
-#ba?ka bir py dosyas?nda deveam etcem
 
+# gladas verisini açma
+with open('Grace/pkl_files/gldas_dict_1809.pkl', 'rb') as file:
+    monthly_gldas = pickle.load(file)
 
 
+ds = monthly_gldas["201001"]
+variables = list(ds.data_vars)[1:]
+monthly_gldas_edited = {}
 
+for key, value in monthly_gldas.items():
+    df = pd.DataFrame()
 
+    for feature in variables:
+        data_array = value[feature]
+        feature_df = data_array.to_dataframe().reset_index().drop("time", axis=1)
+        feature_df = feature_df.dropna(subset=[f"{feature}"])
+        #duplicate_rows_df = feature_df[feature_df.duplicated(subset=["lat", "lon"], keep=False)]
+        #print(duplicate_rows_df.shape)
 
+        if df.empty:
+            df = feature_df
+        else:
+            df = df.merge(feature_df, on=["lat", "lon"])
 
+    monthly_gldas_edited[key] = df.reset_index(drop=True)
 
 
+# Gldas'taki tüm aylara ait koordinatlar ayn? m? Evet
+# Her bir DataFrame içindeki lat-lon çiftlerini toplay?p bir set'e ekleme
+coordinates_per_df = [set(zip(df['lat'], df['lon'])) for df in monthly_gldas_edited.values()]
 
-################################################################
+# ?lk seti referans alarak di?er setler ile kar??la?t?rma
+all_same = all(coords == coordinates_per_df[0] for coords in coordinates_per_df)
 
+# Sonuç olarak evet veya hay?r yazd?rma
+if all_same:
+    print("Evet")
+else:
+    print("Hay?r")
 
 
+# Intersection of latitude and longitude couples that come from Gldas and GRACE datasets.
+intersection_set = first_month_coords.intersection(coordinates_per_df[0])
 
-df_tb = ds['time_bounds'].to_dataframe().reset_index()
-df_tb.head()
-# timebound'daki 0 zaman diliminin ba?lag?c?, 1 ise biti?i
 
+# Editing the coordinates in GLDAS according to the intersection set.
+# Filtrelenmi? DataFrame'leri saklayacak bir sözlük olu?turuyoruz
+filtered_dfs = {}
 
-# 'df_tb' ile 'df_lwe' tablolar?n? birle?tirme
-merged_df = pd.merge(df_lwe.head(30), df_tb.head(30), on='time')
-# ?lk birkaç sat?r? görüntüleme
-print(merged_df)
+# Her bir DataFrame için filtreleme i?lemi
+for key, df in monthly_gldas_edited.items():
+    # DataFrame'deki (lat, lon) sütunlar?na göre tuple olu?turuyoruz
+    df['coord_tuple'] = list(zip(df['lat'], df['lon']))
 
-# 'df_tb' ile 'df_lwe' tablolar?n? birle?tirme
-merged_df = pd.merge(df_lwe.tail(30), df_tb.tail(30), on='time')
-# ?lk birkaç sat?r? görüntüleme
-print(merged_df)
+    # DataFrame'i intersection_set'e göre filtreliyoruz
+    filtered_df = df[df['coord_tuple'].apply(lambda x: x in intersection_set)]
 
+    # Filtrelenmi? DataFrame'i yeni sözlü?e ekliyoruz
+    filtered_dfs[key] = filtered_df
 
+    # 'coord_tuple' sütununu kald?r?yoruz (filtre i?lemi bitti?i için gerek kalmad?)
+    filtered_dfs[key].drop(columns=['coord_tuple'], inplace=True)
 
+monthly_gldas_edited = filtered_dfs.copy()
 
+for key, df in monthly_gldas_edited.items():
+    df.reset_index(drop=True, inplace=True)
 
 
+# Editing the coordinates in GRACE according to the intersection set.
+df = df[df[['lat', 'lon']].apply(tuple, axis=1).isin(intersection_set)]
 
+df.reset_index(drop=True, inplace=True)
 
+# Imputing NaN values
+df["time"] = df["time"].apply(lambda x: x.replace(day=1))
 
-##################################################
-# Ba?lang?ç tarihi
-start_date = pd.Timestamp("2002-01-01")
 
-# time verisi
-time_values = [107.0, 129.5, 227.5]  # Örnek zaman verileri
 
-# Zaman? tarihe çevir
-date_times = pd.to_timedelta(time_values, unit='D') + start_date
-print(date_times)
+# Time sütununu datetime format?na çevir
+df['time'] = pd.to_datetime(df['time'])
 
-##############################
-time_bounds_values = [[94.0, 120.0], [122.0, 137.0], [212.0, 227.5]]  # Örnek time_bounds verisi
+# 2010-01-01 ay?ndaki lat-lon kombinasyonlar?n? al
+reference_lat_lon = df[df['time'] == '2010-01-01'][['lat', 'lon']].drop_duplicates()
 
-# time_bounds'? tarihe çevir
-date_bounds = [(pd.to_timedelta(bounds[0], unit='D') + start_date,
-                pd.to_timedelta(bounds[1], unit='D') + start_date)
-                for bounds in time_bounds_values]
-print(date_bounds)
+# Tüm mevcut aylar? tespit et
+existing_months = df['time'].drop_duplicates()
 
-###################################################################################################################### 3
-ds_3 = xr.open_dataset('Grace/datasets/(3)CSR_GRACE_GRACE-FO_RL06_Mascons_v02_LandMask.nc')
-# land mask
+# 2010 ve 2024 y?llar?ndaki tüm aylar? belirle
+all_months = pd.date_range(start='2010-01-01', end='2024-12-01', freq='MS')
 
-ds_3.info()
-ds_3.variables
-ds_3.data_vars
-ds_3.coords
-ds_3.attrs
+# Eksik aylar? tespit et
+missing_months = all_months.difference(existing_months)
 
-LO_val = ds_3["LO_val"]
-LO_val.shape
+# Eksik aylar için lat-lon kombinasyonlar?n? kullanarak yeni sat?rlar ekle
+missing_data = pd.concat(
+    [pd.DataFrame({
+        'time': [month] * len(reference_lat_lon),  # Eksik olan her ay için lat-lon kombinasyonlar? ekleniyor
+        'lat': reference_lat_lon['lat'].values,
+        'lon': reference_lat_lon['lon'].values,
+        'lwe_thickness': np.nan})  # lwe_thickness sütunu NaN olarak ekleniyor
+     for month in missing_months]
+)
 
-df_3 = ds_3['LO_val'].to_dataframe().reset_index()
-df_3.head(30)
-df_3.shape
-df_3["lat"].nunique()  # 720
-df_3["lon"].nunique()  # 1440
-df_3["LO_val"].nunique()  # 2
+# Eksik aylar? orijinal verilerle birle?tirip s?ralama yap?yoruz
+df_filled_corrected = pd.concat([df, missing_data]).drop_duplicates(subset=['time', 'lat', 'lon']).sort_values(by=['time', 'lat', 'lon']).reset_index(drop=True)
 
-df_3["LO_val"].value_counts()
-# LO_val
-# 0.0    671474
-# 1.0    365326
-# Land=1 and Ocean=0
 
-###################################################################################################################### 4
-ds_4 = xr.open_dataset('Grace/datasets/(4)CSR_GRACE_GRACE-FO_RL06_Mascons_v02_OceanMask.nc')
-# ocean mask
 
-ds_4
-ds_4.variables
-ds_4.data_vars
-ds_4.coords
-ds_4.attrs
+# GRACE dataframe to dictionary
+# 'year-month' format?nda anahtar olu?tur
+df_filled_corrected['key'] = df_filled_corrected['time'].dt.strftime('%Y%m')
 
-########################################################################################################################
-# 'lwe_thickness' de?i?kenini DataFrame'e dönü?türme
-df_lwe = ds['lwe_thickness'].to_dataframe().reset_index()
+# Sözlük olu?tur
+result_dict = {key: group.drop(columns='key') for key, group in df_filled_corrected.groupby('key')}
 
-# DataFrame'in ilk birkaç sat?r?n? görüntüleme
-print(df_lwe.head(30))
 
+for key, value in result_dict.items():
+    value.reset_index(inplace=True, drop=True)
 
-# LWE: Liquid water equivalent thickness
 
 
-# 'time_bounds' de?i?kenini DataFrame'e dönü?türme
-df_tb = ds['time_bounds'].to_dataframe().reset_index()
+# Imputing NaN Values
 
-# DataFrame'in ilk birkaç sat?r?n? görüntüleme
-print(df_tb.head(20))
+
+
+# NaN de?erleri doldurmak için
+for month_key, month_df in result_dict.items():
+    # Anahtar?n ay k?sm?n? al
+    current_month = month_key[-2:]  # Ay k?sm?n? al
+    measurement_index = month_df.index  # Ölçüm noktas? indeksleri
+
+    # Her ölçüm noktas? için
+    for i in measurement_index:
+        if pd.isna(month_df.at[i, 'lwe_thickness']):  # NaN kontrolü
+            # Di?er y?llardaki o ay verilerini toplamak için liste olu?tur
+            other_year_values = []
+            for year in range(2010, 2025):  # 2010'dan 2024'e kadar
+                year_key = f"{year}{current_month}"
+                if year_key in result_dict:
+                    other_year_df = result_dict[year_key]
+                    if i < len(other_year_df):  # Ölçüm noktas? indeksinin geçerli olup olmad???n? kontrol et
+                        value = other_year_df.at[i, 'lwe_thickness']
+                        if pd.notna(value):
+                            other_year_values.append(value)
+
+            # E?er de?erler varsa, ortalamay? hesapla ve NaN olan yere yaz
+            if other_year_values:
+                average_value = np.mean(other_year_values)
+                month_df.at[i, 'lwe_thickness'] = average_value
+
+
+with open('Grace/pkl_files/grace_imputed_in_dict.pkl', 'wb') as f:
+    pickle.dump(result_dict, f)
+

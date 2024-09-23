@@ -1,3 +1,7 @@
+dilara gldas_dict_1809 nu oluşturduğu kodları external datasets e koysun
+
+
+
 netCDF files deniyor bu data dosyalarına
 
 The Gravity Recovery and Climate Experiment (GRACE) was a joint mission of NASA and the German Aerospace Center (DLR).
