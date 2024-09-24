@@ -1,202 +1,163 @@
-import modin.pandas as pd
+import pandas as pd
 import xarray as xr
 import pickle
-import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-from datetime import datetime, timedelta
 
-# Grace verisini açt?k, karalar? filtreledik
+########################################################################################################################
+# GRACE
+########################################################################################################################
+# Opening .nc data files and converting the variables from these files into dataframes
 df_land = xr.open_dataset('Grace/datasets/(3)CSR_GRACE_GRACE-FO_RL06_Mascons_v02_LandMask.nc')
 df_land = df_land['LO_val'].to_dataframe().reset_index()
-
 
 df_lwe = xr.open_dataset('Grace/datasets/(10)CSR_GRACE_GRACE-FO_RL0602_Mascons_all-corrections.nc')
 df_lwe = df_lwe["lwe_thickness"].to_dataframe().reset_index()
 
-# Ayn? sütunu 232 kez tekrar et
+# Reducing the df_lwe dataframe based on the land mask
 df_land_expanded = pd.concat([df_land['LO_val']] * 232, ignore_index=True)
 
-# E?er sadece LO_val sütunu geni?letilecekse ve df_lwe ile birle?tirilecekse
 df = pd.concat([df_lwe, df_land_expanded], axis=1)
-
-# land_mask sütunu de?eri 1 olanlar? filtrele
 df = df[df['LO_val'] == 1]
-
 df.drop("LO_val", axis=1, inplace=True)
 df.reset_index(drop=True, inplace=True)
 
+# Transforming "time" column to date format
+missing_months = ('2002-06;2002-07;2003-06;2011-01;2011-06;2012-05;2012-10;2013-03;2013-08;2013-09;2014-02;2014-07;'
+                  '2014-12;2015-06;2015-10;2015-11;2016-04;2016-09;2016-10;2017-02;2017-02;2017-07;2017-08;2017-09;'
+                  '2017-10;2017-11;2017-12;2018-01;2018-02;2018-03;2018-04;2018-05;2018-08;2018-09')
+missing_months_list = missing_months.split(';')
 
-# time k?sm?n? tarih fromat?na geçirdik
-start_date = datetime.strptime('2002-01-01', '%Y-%m-%d')
+start_date = pd.Period('2002-04', freq='M')
+all_months = pd.period_range(start=start_date, end='2024-04', freq='M')
 
+filtered_months = [str(month) for month in all_months if str(month) not in missing_months_list]
 
-def convert_time_to_date(time_value, start_date):
-    return start_date + timedelta(days=time_value)
+df['time'] = pd.Series(filtered_months).repeat(df.shape[0] // len(filtered_months)).reset_index(drop=True)[:df.shape[0]]
 
-# 'time' de?erlerini tarihe dönü?tür
-df['time'] = df['time'].apply(lambda x: convert_time_to_date(x, start_date))
-
+# GRACE after 2010.01 in time column
+df = df[df['time'] >= '2010-01']
 
 df['lon'] = df['lon'].apply(lambda x: x - 360 if x > 180 else x)
 
-# time sütununu datetime format?na dönü?tür
-df['time'] = pd.to_datetime(df['time'])
-
-# 2010 y?l?ndan önceki sat?rlar? filtrele ve kald?r
-df = df[df['time'] >= '2010-01-01']
-
 df.reset_index(drop=True, inplace=True)
 
-# time sütunundan sadece tarih k?sm?n? almak
-df['time'] = df['time'].dt.date
+# Checking whether coordinates are same for each month
+reference_month_grace = df[df['time'] == '2010-01'][['lat', 'lon']].reset_index(drop=True)
 
+comparison = {}
+for month in df['time'].unique():
+    if month != '2010-01':
+        comparison[month] = df[df['time'] == month][['lat', 'lon']].reset_index(drop=True)
 
-# koordinatlar kontrol ediliyor her ayda ayn? düzendeler mi diye
-# ?lk ay? referans almak için ilk lat-lon çiftlerini çek
-first_month_coords = set(zip(df[df['time'].dt.to_period('M') == df['time'].dt.to_period('M').iloc[0]]['lat'],
-                             df[df['time'].dt.to_period('M') == df['time'].dt.to_period('M').iloc[0]]['lon']))
+results = {month: (reference_month_grace.equals(data) for month, data in comparison.items())}
 
-# Her ay? teker teker kontrol etmek
-all_same = True  # Ba?lang?çta ayn? oldu?unu varsay?yoruz
-for year_month, group in df.groupby(df['time'].dt.to_period('M')):
-    coords = set(zip(group['lat'], group['lon']))
-    if coords != first_month_coords:
-        all_same = False
-        break
+for month, is_equal in results.items():
+    print(f"Comparison result for {month}: {'Same' if is_equal else 'Different'}")
 
-# Sonuç olarak evet veya hay?r yazd?rma
-if all_same:
-    print("Evet")
-else:
-    print("Hay?r")
-
-
-# gladas verisini açma
+########################################################################################################################
+# GLDAS
+########################################################################################################################
 with open('Grace/pkl_files/gldas_dict_2010_2024.pkl', 'rb') as file:
-    monthly_gldas = pickle.load(file)
+    gldas_dict_2010_2024 = pickle.load(file)
 
-# Gldas'taki tüm aylara ait koordinatlar ayn? m? Evet
-# Her bir DataFrame içindeki lat-lon çiftlerini toplay?p bir set'e ekleme
-coordinates_per_df = [set(zip(df['lat'], df['lon'])) for df in monthly_gldas.values()]
-
-# ?lk seti referans alarak di?er setler ile kar??la?t?rma
-all_same = all(coords == coordinates_per_df[0] for coords in coordinates_per_df)
-
-# Sonuç olarak evet veya hay?r yazd?rma
+# Checking whether coordinates are same for each month
+coordinates_per_df_gldas = [set(zip(df['lat'], df['lon'])) for df in gldas_dict_2010_2024.values()]
+all_same = all(coords == coordinates_per_df_gldas[0] for coords in coordinates_per_df_gldas)
 if all_same:
-    print("Evet")
+    print("Yes")
 else:
-    print("Hay?r")
+    print("No")
 
+########################################################################################################################
+# Further Feature Engineering
+########################################################################################################################
 # Intersection of latitude and longitude couples that come from Gldas and GRACE datasets.
-intersection_set = first_month_coords.intersection(coordinates_per_df[0])
+a_month_set = set(zip(reference_month_grace['lat'], reference_month_grace['lon']))
+coordinates_set = set(coordinates_per_df_gldas[0])
+intersection_set = a_month_set.intersection(coordinates_set)
 
 # Editing the coordinates in GLDAS according to the intersection set.
-# Filtrelenmi? DataFrame'leri saklayacak bir sözlük olu?turuyoruz
 filtered_dfs = {}
 
-for key, df in monthly_gldas.items():
-    # DataFrame'deki (lat, lon) sütunlar?na göre tuple olu?turuyoruz
-    df['coord_tuple'] = list(zip(df['lat'], df['lon']))
+for key, dataframe in gldas_dict_2010_2024.items():
+    dataframe['coord_tuple'] = list(zip(dataframe['lat'], dataframe['lon']))
 
-    # DataFrame'i intersection_set'e göre filtreliyoruz
-    filtered_df = df[df['coord_tuple'].apply(lambda x: x in intersection_set)]
+    filtered_df = dataframe[dataframe['coord_tuple'].apply(lambda x: x in intersection_set)]
 
-    # Filtrelenmi? DataFrame'i yeni sözlü?e ekliyoruz
-    filtered_dfs[key] = filtered_df.drop(columns=['coord_tuple'], inplace=True)
+    filtered_dfs[key] = filtered_df.drop(columns=['coord_tuple'])
 
-for key, df in filtered_dfs.items():
-    df.reset_index(drop=True, inplace=True)
+for key, dataframe in filtered_dfs.items():
+    dataframe.reset_index(drop=True, inplace=True)
 
-with open("Grace/pkl_files/gldas_dict_2010_2024.pkl", "wb") as f:
-    pickle.dump(filtered_dfs, f)
-
-
-
-# GRACE filtreleme, nan doldurma, sözlük yapma
-# Editing the coordinates in GRACE according to the intersection set.
-df = df[df[['lat', 'lon']].apply(tuple, axis=1).isin(intersection_set)]
+# Editing the coordinates in GRACE according to the intersection set
+gizmo = df.groupby('time', group_keys=False).apply(lambda group: group[group[['lat', 'lon']].apply(tuple, axis=1).isin(intersection_set)])
 
 df.reset_index(drop=True, inplace=True)
 
-# Imputing NaN values
-df["time"] = df["time"].apply(lambda x: x.replace(day=1))
+
+# with open("Grace/pkl_files/df.pkl", "wb") as f:
+#     pickle.dump(df, f)
+
+with open('Grace/pkl_files/df.pkl', 'rb') as file:
+    df = pickle.load(file)
 
 
 
-# Time sütununu datetime format?na çevir
+# Filling in the missing months in the dataframe and assigning nan values to the lew_thickness columns.
 df['time'] = pd.to_datetime(df['time'])
-
-# 2010-01-01 ay?ndaki lat-lon kombinasyonlar?n? al
 reference_lat_lon = df[df['time'] == '2010-01-01'][['lat', 'lon']].drop_duplicates()
 
-# Tüm mevcut aylar? tespit et
 existing_months = df['time'].drop_duplicates()
-
-# 2010 ve 2024 y?llar?ndaki tüm aylar? belirle
-all_months = pd.date_range(start='2010-01-01', end='2024-12-01', freq='MS')
-
-# Eksik aylar? tespit et
+all_months = pd.date_range(start='2010-01-01', end='2024-04-01', freq='MS')
 missing_months = all_months.difference(existing_months)
 
-# Eksik aylar için lat-lon kombinasyonlar?n? kullanarak yeni sat?rlar ekle
 missing_data = pd.concat(
     [pd.DataFrame({
-        'time': [month] * len(reference_lat_lon),  # Eksik olan her ay için lat-lon kombinasyonlar? ekleniyor
+        'time': [month] * len(reference_lat_lon),
         'lat': reference_lat_lon['lat'].values,
         'lon': reference_lat_lon['lon'].values,
-        'lwe_thickness': np.nan})  # lwe_thickness sütunu NaN olarak ekleniyor
+        'lwe_thickness': np.nan})
      for month in missing_months]
 )
 
-# Eksik aylar? orijinal verilerle birle?tirip s?ralama yap?yoruz
 df_filled_corrected = pd.concat([df, missing_data]).drop_duplicates(subset=['time', 'lat', 'lon']).sort_values(by=['time', 'lat', 'lon']).reset_index(drop=True)
 
 
 
-# GRACE dataframe to dictionary
-# 'year-month' format?nda anahtar olu?tur
+# GRACE: dataframe to dictionary
 df_filled_corrected['key'] = df_filled_corrected['time'].dt.strftime('%Y%m')
 
-# Sözlük olu?tur
 result_dict = {key: group.drop(columns='key') for key, group in df_filled_corrected.groupby('key')}
-
 
 for key, value in result_dict.items():
     value.reset_index(inplace=True, drop=True)
 
 
-
-# Imputing NaN Values
-# NaN de?erleri doldurmak için
+# Imputing NaN Values in the dictionary.
 for month_key, month_df in result_dict.items():
-    # Anahtar?n ay k?sm?n? al
-    current_month = month_key[-2:]  # Ay k?sm?n? al
-    measurement_index = month_df.index  # Ölçüm noktas? indeksleri
+    current_month = month_key[-2:]
+    measurement_index = month_df.index
 
-    # Her ölçüm noktas? için
     for i in measurement_index:
-        if pd.isna(month_df.at[i, 'lwe_thickness']):  # NaN kontrolü
-            # Di?er y?llardaki o ay verilerini toplamak için liste olu?tur
+        if pd.isna(month_df.at[i, 'lwe_thickness']):
             other_year_values = []
-            for year in range(2010, 2025):  # 2010'dan 2024'e kadar
+            for year in range(2010, 2025):
                 year_key = f"{year}{current_month}"
                 if year_key in result_dict:
                     other_year_df = result_dict[year_key]
-                    if i < len(other_year_df):  # Ölçüm noktas? indeksinin geçerli olup olmad???n? kontrol et
+                    if i < len(other_year_df):
                         value = other_year_df.at[i, 'lwe_thickness']
                         if pd.notna(value):
                             other_year_values.append(value)
 
-            # E?er de?erler varsa, ortalamay? hesapla ve NaN olan yere yaz
             if other_year_values:
                 average_value = np.mean(other_year_values)
                 month_df.at[i, 'lwe_thickness'] = average_value
 
 
-with open('Grace/pkl_files/grace_imputed_in_dict.pkl', 'wb') as f:
-    pickle.dump(result_dict, f)
+# Creating .pkl file of the dictionary
+# with open('Grace/pkl_files/grace_imputed_in_dict.pkl', 'wb') as f:
+#     pickle.dump(result_dict, f)
 
 
 # Merging Gldas and GRACE datasets
@@ -209,78 +170,89 @@ with open("Grace/pkl_files/grace_imputed_in_dict.pkl", "rb") as f:
 with open("Grace/pkl_files/gldas_dict_2004_2009.pkl", "rb") as f:
     gldas_dict_2004_2009 = pickle.load(f)
 
+with open('Grace/pkl_files/intersection_set.pkl', 'rb') as file:
+    intersection_set = pickle.load(file)
 
-# Merging Grace and Gladas
+gldas_dict_2010_2024.pop('202405', None)
+
+# Merging Grace and Gldas
 for key in gldas_dict_2010_2024.keys():
-    # GLDAS ve GRACE verilerinin o aya ait DataFrame'lerini al
+
     gldas_df = gldas_dict_2010_2024[key]
     grace_df = grace_dict[key]
 
     if grace_df is not None:
-        # GLDAS ve GRACE DataFrame'lerini lat ve lon sütunlar?na göre birle?tir (inner join)
         merged_df = gldas_df.merge(grace_df[['lat', 'lon', 'lwe_thickness']], on=['lat', 'lon'], how='inner')
 
-        # Birle?tirilmi? DataFrame'i GLDAS dict'ine geri koy
         gldas_dict_2010_2024[key] = merged_df
 
 
-# Veriyi 209 sat?rda bire dü?ürme fonksiyonu
+filtered_dict = {}
+for key, df in gldas_dict_2004_2009.items():
+
+    filtered_df = df[df[['lat', 'lon']].apply(tuple, axis=1).isin(intersection_set)]
+    filtered_dict[key] = filtered_df
+
+gldas_dict_2004_2009 = filtered_dict.copy()
+
+
+# Selecting coordinates in every 209 given longitude
 def reduce_to_first_of_209(df):
-    return df.iloc[::209, :]  # Her 209 sat?rdan birini (ilk sat?r?) al
+    return df.iloc[::209, :]
 
 
 def convert_cols(df, input_col):
-    # Sütunun tipini anlamak için son k?sm? kontrol etme ('_tavg' veya '_acc')
-    col_type = input_col.split("_")[-1]  # f-string hatas? düzeltildi
+    col_type = input_col.split("_")[-1]
 
-    # E?er sütun '_tavg' ile bitiyorsa, özel formül uygulay?n
     if col_type == "tavg":
         df[f"new_{input_col}"] = df[input_col] * 10800 * 8 * 30
-        df.drop(input_col, axis=1, inplace=True)  # Eski sütunu kald?r
-    # E?er sütun '_acc' ile bitiyorsa, farkl? bir formül uygulay?n
+        df.drop(input_col, axis=1, inplace=True)
+
     elif col_type == "acc":
         df[f"new_{input_col}"] = df[input_col] * 8 * 30
-        df.drop(input_col, axis=1, inplace=True)  # Eski sütunu kald?r
-
+        df.drop(input_col, axis=1, inplace=True)
 
 
 def process_data(dict):
     results_dict = {}
 
     for key, df in dict.items():
-        # Her 209 sat?rdan birini al ve küçültülmü? DataFrame'i results_dict'e ekle
         results_dict[key] = reduce_to_first_of_209(df)
         results_dict[key].reset_index(drop=True, inplace=True)
 
     for month, df in results_dict.items():
         for col in df.columns:
-            # Sadece '_tavg' veya '_acc' içeren sütunlar? dönü?tür
             if "_tavg" in col or "_acc" in col:
                 convert_cols(df, col)
 
-        # Yeni hesaplamalar yaparak sütunlar? ekleyin
         try:
-            df['MSW'] = (df['new_Rainf_f_tavg'] + df['new_Qsb_acc']) - (df['new_Evap_tavg'] - df['new_ESoil_tavg'] + df['new_Qs_acc'])
+            df['MSW'] = (df['new_Rainf_f_tavg'] + df['new_Qsb_acc']) - (
+                        df['new_Evap_tavg'] - df['new_ESoil_tavg'] + df['new_Qs_acc'])
         except KeyError as e:
             print(f"KeyError: {e}. Bu sütun eksik olabilir.")
 
         df.rename(columns={'SWE_inst': 'MSN'}, inplace=True)
-        if 'lwe_thickness' in df.columns:
-            df.rename(columns={'lwe_thickness': 'deltaTWS'}, inplace=True)
 
-        # Toprak nemi ve s?cakl?k ortalamalar?n? hesaplay?n
+        # 'lwe_thickness' sütunu varsa deltaTWS hesaplan?yor
+        if 'lwe_thickness' in df.columns:
+            df['deltaTWS'] = df["lwe_thickness"] * 10.25
+
         df['MSM'] = (df["SoilMoi0_10cm_inst"] + df["SoilMoi10_40cm_inst"] + df["SoilMoi40_100cm_inst"] +
                      df["SoilMoi100_200cm_inst"])
 
         df['SoilTMP0_avg'] = (df['SoilTMP0_10cm_inst'] + df['SoilTMP10_40cm_inst'] + df['SoilTMP40_100cm_inst'] +
                               df['SoilTMP100_200cm_inst'])
 
-        # Kullan?lmayan sütunlar? kald?r?n
+        # Silinecek kolonlar listesi
         cols_to_drop = ['SoilMoi0_10cm_inst', 'SoilMoi10_40cm_inst', 'SoilMoi40_100cm_inst', 'SoilMoi100_200cm_inst',
                         'SoilTMP0_10cm_inst', 'SoilTMP10_40cm_inst', 'SoilTMP40_100cm_inst', 'SoilTMP100_200cm_inst']
-        df.drop(cols_to_drop, axis=1, inplace=True)
 
-        # Güncellenmi? DataFrame'i sözlü?e geri yaz
+        # 'lwe_thickness' varsa, silinecek kolonlar listesine ekleniyor
+        if 'lwe_thickness' in df.columns:
+            cols_to_drop.append('lwe_thickness')
+
+        df.drop([col for col in cols_to_drop if col in df.columns], axis=1, inplace=True)
+
         results_dict[month] = df
 
     return results_dict
@@ -290,13 +262,311 @@ results_dict_2010_2024 = process_data(gldas_dict_2010_2024)
 results_dict_2004_2009 = process_data(gldas_dict_2004_2009)
 
 
-with open('Grace/pkl_files/results_dict_2010_2024.pkl', 'wb') as file:
-    pickle.dump(results_dict_2010_2024, file)
-
-with open('Grace/pkl_files/results_dict_2004_2009.pkl', 'wb') as file:
-    pickle.dump(results_dict_2004_2009, file)
-
 
 # gldas2004-2009 daki 'MSW', 'MSM', 'MSN ortalamalar?n? hesapla:
 
-# deliricem art?k yether
+# ?lk DataFrame'i al
+first_df = next(iter(results_dict_2004_2009.values()))
+
+# Lat ve Lon kolonlar?n? al
+lat_lon_pairs = first_df[['lat', 'lon']].copy()
+
+# Tüm DataFrame'lerdeki lat ve lon kolonlar?n? kar??la?t?r
+for key, df in results_dict_2004_2009.items():
+    if not df[['lat', 'lon']].equals(lat_lon_pairs):
+        print(f"{key} DataFrame'inde lat ve lon kolonlar? farkl?.")
+        break
+else:
+    print("Tüm DataFrame'lerde lat ve lon kolonlar? ayn?.")
+# ayn?lar
+
+
+
+
+# ?lk DataFrame'den lat ve lon kolonlar?n? al
+first_df = next(iter(results_dict_2004_2009.values()))
+mean_df = first_df[['lat', 'lon']].copy()
+
+# MSN_mean, MSW_mean ve MSM_mean kolonlar?n? ekle
+mean_df[['MSN_mean', 'MSW_mean', 'MSM_mean']] = 0.0
+
+# Her ölçüm noktas? için 72 ayl?k ortalamalar? hesapla
+for index in range(len(first_df)):
+    mean_df.loc[index, ['MSN_mean', 'MSW_mean', 'MSM_mean']] = [
+        sum(df[col].iloc[index] for df in results_dict_2004_2009.values()) / len(results_dict_2004_2009)
+        for col in ['MSN', 'MSW', 'MSM']]
+
+
+"""
+###################33 kontrol - ilk sat?ra bak?yorum
+import pandas as pd
+
+# Bo? bir liste olu?turun
+first_rows = []
+
+# Sözlükteki her bir dataframe'in ilk sat?r?n? al?n
+for key in sorted(results_dict_2004_2009.keys()):
+    df = results_dict_2004_2009[key]
+    first_rows.append(df.iloc[0])  # ?lk sat?r? ekleyin
+
+# ?lk sat?rlardan olu?an bir dataframe olu?turun
+first_rows_df = pd.DataFrame(first_rows)
+
+# ?lgili sütunlar?n ortalamalar?n? hesaplay?n
+averages = first_rows_df[['MSN', 'MSW', 'MSM']].mean()
+
+# Sonuçlar? görüntüleyin
+print(averages)
+
+######################## olmus
+"""
+
+# results_dict_2010_2024 sözlü?üne deltal? de?erleri getirme
+
+# Her bir ay için sözlükteki dataframe'lerde mean_df'den fark hesaplayarak yeni kolonlar ekleme
+for key, df in results_dict_2010_2024.items():
+    # mean_df ile ayn? lat-lon e?le?melerini buluyoruz
+    df_merged = df.merge(mean_df[['lat', 'lon', 'MSN_mean', 'MSW_mean', 'MSM_mean']], on=['lat', 'lon'])
+
+    # Yeni kolonlar? olu?turuyoruz
+    df['delta_MSN'] = df['MSN'] - df_merged['MSN_mean']
+    df['delta_MSW'] = df['MSW'] - df_merged['MSW_mean']
+    df['delta_MSM'] = df['MSM'] - df_merged['MSM_mean']
+
+    # Güncellenmi? dataframe'i sözlü?e tekrar kaydediyoruz
+    results_dict_2010_2024[key] = df
+
+
+# delta groundwater'? getiriyoruz ?imdi
+#        deltaMGw = deltaTWS - deltaMSM - deltaMSN - deltaMSw
+
+for key, df in results_dict_2010_2024.items():
+    df['delta_MGW'] = df['deltaTWS'] - df['delta_MSM'] - df['delta_MSN']  - df['delta_MSW']
+
+
+
+
+
+with open('Grace/pkl_files/final_data.pkl', 'wb') as file:
+    pickle.dump(results_dict_2004_2009, file)
+
+import pickle
+with open('Grace/pkl_files/final_data.pkl', 'rb') as file:
+    final_data = pickle.load(file)
+
+
+
+# ??TE KAR?INIZDA TARGETTTTTT
+
+# TRA?N TEST AYRIMI
+train_dict = {}
+test_dict = {}
+
+# Sözlükteki her bir DataFrame için döngü
+for key, df in results_dict_2010_2024.items():
+    date_key = pd.to_datetime(str(key), format='%Y%m')
+    year = date_key.year
+
+    if 2010 <= year <= 2018:
+        train_dict[key] = df
+    elif 2019 <= year <= 2024:
+        test_dict[key] = df
+
+
+
+# with open('Grace/pkl_files/results_dict_2010_2024.pkl', 'wb') as file:
+#     pickle.dump(results_dict_2010_2024, file)
+#
+# with open('Grace/pkl_files/results_dict_2004_2009.pkl', 'wb') as file:
+#     pickle.dump(results_dict_2004_2009, file)
+
+with open('Grace/pkl_files/results_dict_2010_2024.pkl', 'rb') as file:
+    results_dict_2010_2024 = pickle.load(file)
+
+with open('Grace/pkl_files/results_dict_2004_2009.pkl', 'rb') as file:
+    results_dict_2004_2009 = pickle.load(file)
+
+
+
+
+# with open('Grace/pkl_files/train_dict.pkl', 'wb') as file:
+#     pickle.dump(train_dict, file)
+#
+# with open('Grace/pkl_files/test_dict.pkl', 'wb') as file:
+#     pickle.dump(test_dict, file)
+
+with open('Grace/pkl_files/train_dict.pkl', 'rb') as file:
+    train_dict = pickle.load(file)
+
+with open('Grace/pkl_files/test_dict.pkl', 'rb') as file:
+    test_dict = pickle.load(file)
+
+# Kontrol etme
+lat_values = [df['lat'].values for df in test_dict.values()]
+lon_values = [df['lon'].values for df in test_dict.values()]
+
+# Kontrol sonuçlar?n? yazd?rma
+for i in range(len(lat_values)):
+    for j in range(i + 1, len(lat_values)):
+        lat_equal = (lat_values[i] == lat_values[j]).all()
+        lon_equal = (lon_values[i] == lon_values[j]).all()
+
+        if not lat_equal:
+            print(f"df{i + 1} ve df{j + 1}: 'lat' kolonlar? farkl?.")
+
+        if not lon_equal:
+            print(f"df{i + 1} ve df{j + 1}: 'lon' kolonlar? farkl?.")
+
+
+
+
+lat_values = [df['lat'].values for df in train_dict.values()]
+lon_values = [df['lon'].values for df in train_dict.values()]
+
+# Kontrol sonuçlar?n? yazd?rma
+for i in range(len(lat_values)):
+    for j in range(i + 1, len(lat_values)):
+        lat_equal = (lat_values[i] == lat_values[j]).all()
+        lon_equal = (lon_values[i] == lon_values[j]).all()
+
+        if not lat_equal:
+            print(f"df{i + 1} ve df{j + 1}: 'lat' kolonlar? farkl?.")
+
+        if not lon_equal:
+            print(f"df{i + 1} ve df{j + 1}: 'lon' kolonlar? farkl?.")
+
+
+
+
+# gizmolettin lstm denio
+# tek bir noktada
+
+
+# Bo? bir DataFrame olu?tur
+time_series_train = pd.DataFrame()
+time_series_test = pd.DataFrame()
+
+# Train verisi için döngü
+for key, df in train_dict.items():
+    # DataFrame'in ilk sat?r?n? al
+    first_row = df.iloc[0].copy()
+    # Key'i yeni DataFrame'e zaman sütunu olarak ekle
+    first_row['time'] = key
+    # Yeni DataFrame'e ekle
+    time_series_train = pd.concat([time_series_train, first_row.to_frame().T], ignore_index=True)
+
+# Test verisi için döngü
+for key, df in test_dict.items():
+    # DataFrame'in ilk sat?r?n? al
+    first_row = df.iloc[0].copy()
+    # Key'i yeni DataFrame'e zaman sütunu olarak ekle
+    first_row['time'] = key
+    # Yeni DataFrame'e ekle
+    time_series_test = pd.concat([time_series_test, first_row.to_frame().T], ignore_index=True)
+
+# Sütun s?ras?n? düzenle
+train = time_series_train[['time'] + [col for col in train_dict[next(iter(train_dict))].columns]]
+test = time_series_test[['time'] + [col for col in test_dict[next(iter(test_dict))].columns]]
+
+
+
+drop_list = ["time", "lat", "lon"]
+
+train.drop(drop_list, inplace=True, axis=1)
+
+
+train.head()
+test.head()
+
+
+########### eda
+import pandas as pd
+import numpy as np
+from keras.models import Sequential
+from keras.layers import LSTM, Dense, Dropout, LayerNormalization
+from keras.callbacks import EarlyStopping
+import matplotlib.pyplot as plt
+
+# Veriyi yükleyin
+data = train.copy()
+
+# Lat ve lon hariç tüm özellikleri kullan?yoruz
+target = data['delta_MGW']
+features = data.drop(columns=['lat', 'lon', 'delta_MGW'])
+
+# Zaman kolonunu datetime format?na çevir
+data['time'] = pd.to_datetime(data['time'].astype(str), format='%Y%m')
+
+
+# Zaman serisi veri setini olu?turma
+def create_dataset(features, target, time_steps=1):
+    X, y = [], []
+    for i in range(len(features) - time_steps):
+        X.append(features[i:(i + time_steps)].values)
+        y.append(target[i + time_steps])
+    return np.array(X), np.array(y)
+
+
+# 12 ayl?k geçmi? veriyi kullanarak (örne?in)
+time_steps = 12
+X, y = create_dataset(features, target, time_steps)
+X = X.astype(float)
+y = y.astype(float)
+
+# LSTM modelini olu?turun
+model = Sequential()
+model.add(LSTM(50, return_sequences=True, input_shape=(X.shape[1], X.shape[2])))
+model.add(LayerNormalization())
+model.add(Dropout(0.2))
+model.add(LSTM(50, return_sequences=False))
+model.add(LayerNormalization())
+model.add(Dropout(0.2))
+model.add(Dense(25))
+model.add(Dense(1))
+
+# Modeli derleyin
+model.compile(optimizer='adam', loss='mean_squared_error')
+
+# EarlyStopping ile e?itim yap?n
+model.fit(X, y, batch_size=32, epochs=100)
+
+
+# Tahmin için 60 ay ekleme
+def predict_future(model, features, time_steps, n_months=60):
+    predictions = []
+    current_input = features[-time_steps:]  # Son 12 ay?n verisini al
+    current_input = np.array(current_input, dtype=np.float32)
+
+    for _ in range(n_months):
+        current_input = current_input.reshape((1, current_input.shape[0], current_input.shape[1]))
+        pred = model.predict(current_input)[0][0]
+        predictions.append(pred)
+
+        # Gelecek tahminin giri?i için güncelleme
+        # new_input = np.append(current_input[0], pred).reshape((current_input.shape[1] + 1, current_input.shape[2]))
+        # current_input = new_input[-time_steps:]
+    return predictions
+
+
+# Gelecek 60 ay için tahmin yap
+future_predictions = predict_future(model, features.values, time_steps, n_months=60)
+
+# Sonuçlar? görüntüle
+plt.figure(figsize=(14, 5))
+plt.plot(range(len(y), len(y) + 60), future_predictions, color='red', label='Tahmin Edilen De?erler (60 Ay Sonras?)')
+plt.title('delta_MGW Tahmini')
+plt.xlabel('Zaman')
+plt.ylabel('delta_MGW')
+plt.legend()
+plt.show()
+
+##########
+
+
+
+
+
+
+
+
+
