@@ -1,23 +1,20 @@
-# IMPORTS
+# Importing Libraries and Arranging Console Display.
 import pandas as pd
 import numpy as np
-import matplotlib
-import warnings
+import itertools
 import pickle
 import os
-from statsmodels.tools.sm_exceptions import ConvergenceWarning
+import random
 from datetime import datetime
 from scipy.spatial import distance
 from statsmodels.tsa.statespace.sarimax import SARIMAX
-import matplotlib.pyplot as plt
-# matplotlib.use('Qt5Agg')
+import warnings
+warnings.filterwarnings("ignore")
 pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', None)
 pd.set_option('display.float_format', lambda x: '%.3f' % x)
 pd.set_option('display.max_colwidth', None)
 pd.set_option('display.width', 500)
-warnings.simplefilter('ignore', category=ConvergenceWarning)
-
 
 # FUNCTIONS
 def station_coordinates(input):
@@ -206,7 +203,6 @@ def save_to_pickle(item, filename):
 ########################################################################################################################
 # Creating Dataframes from given CSVs
 ########################################################################################################################
-
 # Define paths and coordinates
 groundwater_all_coordinates = station_coordinates("Groundwater")
 precipitation_coordinates = station_coordinates("Precipitation")
@@ -282,7 +278,7 @@ def find_nearest_coordinates(gw_row, df, k=20):
     nearest_indices = distances.nsmallest(k).index
     return df.loc[nearest_indices]
 
-# Creating a dataframe that stores all the associated features of the 487 stations.
+# Creating a dataframe that stores all the associated features' information of the 487 stations.
 data = pd.DataFrame()
 def add_nearest_coordinates_column(df_to_add, name, k, df_to_merge=None):
     if df_to_merge is None:
@@ -318,7 +314,7 @@ def add_nearest_coordinates_column(df_to_add, name, k, df_to_merge=None):
     return df
 
 data = add_nearest_coordinates_column(gw_temp_coordinates, 'nearest_gw_temp', 1, df_to_merge=filtered_gw_coordinates)
-data = add_nearest_coordinates_column(rain_coord, 'nearest_rain', 3, df_to_merge=data) # TODO burada data arguman? default oldugu icin silebiliriz.
+data = add_nearest_coordinates_column(rain_coord, 'nearest_rain', 3, df_to_merge=data)
 data = add_nearest_coordinates_column(snow_coord, 'nearest_snow', 3, df_to_merge=data)
 data = add_nearest_coordinates_column(source_fr_coord, 'nearest_source_fr', 1, df_to_merge=data)
 data = add_nearest_coordinates_column(conduct_coord, 'nearest_conductivity', 1, df_to_merge=data)
@@ -328,10 +324,6 @@ data = add_nearest_coordinates_column(surface_water_temp_coord, 'nearest_owf_tem
 data = add_nearest_coordinates_column(sediment_coord, 'nearest_sediment', 1, df_to_merge=data)
 data = add_nearest_coordinates_column(surface_water_fr_coord, 'nearest_owf_fr', 3, df_to_merge=data)
 data.drop(["x", "y"], axis=1, inplace=True)
-
-# For the .pkl file of the above dataframe named 'data'
-file_path = os.path.join('Ehyd', 'pkl_files', 'data.pkl')
-save_to_pickle(data, file_path)
 
 ########################################################################################################################
 # Imputing NaN Values
@@ -423,12 +415,6 @@ for dictionary in filled_dict_list:
         df = df.astype(np.float32)
         dictionary[key] = df
 
-# For the making of .pkl files of the dictionaries in the list named 'filled_dict_list'
-for dictionary in filled_dict_list:
-    dict_name = [name for name in globals() if globals()[name] is dictionary][0]
-    filename = os.path.join("Ehyd", "pkl_files", f'{dict_name}.pkl')
-    save_to_pickle(dictionary, filename)
-
 ########################################################################################################################
 # Creating two new dictionaries:
 #   new_dataframes: is a dictionary storing DataFrames specific to each measurement station, containing both the
@@ -456,7 +442,6 @@ for idx, row in data.iterrows():
     code = str(row['hzbnr01'][0])
 
     if code in filled_filtered_groundwater_dict:
-
         df = filled_filtered_groundwater_dict[code].copy()
 
         for key, (prefix, source_dict) in data_sources.items():
@@ -479,45 +464,24 @@ for year in range(1985, 2022):
     for month in range(1, 13):
 
         key = f"{year}_{month:02d}"
-
         monthly_data = []
 
         for df_id, df in new_dataframes.items():
-
             mask = (df.index.to_period("M").year == year) & (df.index.to_period("M").month == month)
 
             if mask.any():
-
                 filtered_df = df[mask]
-
                 new_index = [f"{df_id}" for i in range(len(filtered_df))]
                 filtered_df.index = new_index
-
                 monthly_data.append(filtered_df)
 
         if monthly_data:
-
             combined_df = pd.concat(monthly_data)
-
             monthly_dict_85to21[key] = combined_df
-
-# Creating the .pkl of the monthly_dict_85to21
-file_path = os.path.join("Ehyd", "pkl_files", 'monthly_dict_85to21.pkl')
-save_to_pickle(monthly_dict_85to21, file_path)
-
-file_path = os.path.join("Ehyd", "pkl_files", 'new_dataframes.pkl')
-save_to_pickle(new_dataframes, file_path)
-
-with open(os.path.join('Ehyd', 'pkl_files', 'new_dataframes.pkl'), 'rb') as file:
-    new_dataframes = pickle.load(file)
 
 ########################################################################################################################
 # SARIMA Model
 ########################################################################################################################
-
-with open(os.path.join('Ehyd', 'pkl_files', 'monthly_dict_85to21.pkl'), 'rb') as file:
-    monthly_dict_85to21 = pickle.load(file)
-
 monthly_dict_with_correlation = monthly_dict_85to21.copy()
 
 def average_correlation_feature_selection(data_dict, threshold=0.1):
@@ -557,57 +521,31 @@ def average_correlation_feature_selection(data_dict, threshold=0.1):
 
 common_features = average_correlation_feature_selection(monthly_dict_with_correlation, threshold=0.4)  # 39
 
-# hiperparametre optimizasyonu
-# Yeni ba?lang?ç tarihi
+"""
 new_start_date = pd.to_datetime('1985-01-01')
 
-# Yeni veri çerçeveleri sözlü?ü
 adjusted_dataframes = {}
 
 for key, df in new_dataframes.items():
     try:
-        # Mevcut indeksin tarih format?na dönü?türülmesi
         df.index = pd.to_datetime(df.index)
-
-        # Veriyi 1985-01-01 tarihinden itibaren filtreleme
         df_filtered = df[df.index >= new_start_date]
-
-        # Yeni sözlü?e ekleme
         adjusted_dataframes[key] = df_filtered
     except Exception as e:
         print(f"An error occurred with key {key}: {e}")
-
-# adjusted_dataframes içinde zaman serilerinin yeni ba?lang?ç tarihi ile güncellenmi? halleri bulunur.
 
 
 filtered_dataframes = {}
 
 def filter_dataframe_by_features(df, features):
-    """
-    Filter the DataFrame columns by the specified feature list, while keeping the target column.
-
-    Parameters:
-        df (pd.DataFrame): The DataFrame to filter.
-        features (list): List of column names to keep, excluding the target column.
-
-    Returns:
-        pd.DataFrame: Filtered DataFrame with the target column included.
-    """
-    # Target de?i?keninin ad?n? almak için ilk sütunu ay?r?n
     target_column = df.columns[0]
-
-    # Target de?i?keni hariç sütunlar? belirleyin
     filtered_features = [target_column] + [col for col in features if col != target_column]
-
-    # Belirlenen sütunlar? seçin
     df_filtered = df[filtered_features]
 
     return df_filtered
 
-
 for key, df in adjusted_dataframes.items():
     try:
-        # Target de?i?keni ile birlikte common_features sütunlar?n? filtreleyin
         filtered_df = filter_dataframe_by_features(df, common_features)
         filtered_dataframes[key] = filtered_df
     except KeyError as e:
@@ -618,25 +556,10 @@ for key, df in adjusted_dataframes.items():
 for key, value in filtered_dataframes.items():
     print(value.head())
 
-# filtered_dataframes art?k common_features ile filtrelenmi? veri çerçevelerini içeriyor.
-
-
-
-
-
-
-
-
-
-import itertools
-import pandas as pd
-from statsmodels.tsa.statespace.sarimax import SARIMAX
-import random
-
-# Hyperparameter Optimization (Model Derecelerini Belirleme)
+# Hyperparameter Optimization
 p = d = q = range(0, 2)
-pdq = list(itertools.product(p, d, q))  # itertools.product kombolar? getiriyor
-seasonal_pdq = [(x[0], x[1], x[2], 12) for x in list(itertools.product(p, d, q))]  # 12 ayda bir döngü tamamlan?yor
+pdq = list(itertools.product(p, d, q))
+seasonal_pdq = [(x[0], x[1], x[2], 12) for x in list(itertools.product(p, d, q))]
 
 def sarima_optimizer_aic(train, exog, pdq, seasonal_pdq):
     best_aic, best_order, best_seasonal_order = float("inf"), None, None
@@ -657,16 +580,13 @@ def sarima_optimizer_aic(train, exog, pdq, seasonal_pdq):
 
 results = {}
 
-# Rastgele 20 veri çerçevesi seç
 sampled_keys = random.sample(list(filtered_dataframes.keys()), 10)
 
 for df_id in sampled_keys:
     df = filtered_dataframes[df_id]
     if not df.empty:
-        # Target sütunu ve di?er sütunlar? ay?r
         train = df['Values']
-        exog = df.drop(columns=['Values'])  # 'Values' sütunu d???ndaki di?er sütunlar
-        # Hiperparametre optimizasyonunu yap
+        exog = df.drop(columns=['Values'])
         best_order, best_seasonal_order = sarima_optimizer_aic(train, exog, pdq, seasonal_pdq)
         results[df_id] = {
             'Best Order': best_order,
@@ -678,24 +598,17 @@ for df_id in sampled_keys:
             'Best Seasonal Order': None
         }
 
-# Sonuçlar? yazd?r
 for df_id, res in results.items():
     print(f'DataFrame ID: {df_id}')
     print(f'Best Order: {res["Best Order"]}')
     print(f'Best Seasonal Order: {res["Best Seasonal Order"]}')
     print('---')
 
-
-# Genel olarak, ilk deneme için (1, 0, 1) ve (0, 1, 1, 12)
-# kombinasyonu iyi bir ba?lang?ç noktas? gibi görünüyor çünkü birçok veri setinde bu kombinasyonun iyi çal??t??? gözüküyor.
-
-
-
+# order=(1, 0, 1) and seasonal_order=(0, 1, 1, 12) are the top picks.
 
 
 for month, df in monthly_dict_with_correlation.items():
     monthly_dict_with_correlation[month] = df[ ['Values'] + common_features]
-
 
 # Test months to forecast
 forecast_months = ['2020_01', '2020_02', '2020_03', '2020_04', '2020_05', '2020_06',
@@ -705,182 +618,83 @@ forecast_months = ['2020_01', '2020_02', '2020_03', '2020_04', '2020_05', '2020_
 
 train_data = {month: df for month, df in monthly_dict_with_correlation.items() if month not in forecast_months}
 
-train_data = {k: v for k, v in train_data.items() if k >= "2000_01"}
-
+train_data = {k: v for k, v in train_data.items() if k >= "2015_01"}
 
 all_data = pd.concat([df for df in train_data.values()])
 
-# Her istasyon için 24 ayl?k tahmin yapma
 forecasts = {}
 for station in all_data.index.unique():
-    # ?stasyon verilerini al
     station_data = all_data.loc[station]
 
-    # Modeli olu?turma ve e?itme
     model = SARIMAX(
-        station_data['Values'],  # Hedef de?i?ken
-        exog=station_data.drop(columns=['Values']),  # Di?er özellikler
-        order=(1, 0, 1),  # ARIMA parametreleri
-        seasonal_order=(0, 1, 1, 12)  # Mevsimsel ARIMA parametreleri
+        station_data['Values'],
+        exog=station_data.drop(columns=['Values']),
+        order=(1, 0, 1),
+        seasonal_order=(0, 1, 1, 12)
     )
     model_fit = model.fit(disp=False)
 
-    # 24 ayl?k tahmin yap
     forecast = model_fit.get_forecast(steps=24, exog=station_data.drop(columns=['Values']).values[
-                                                     -24:])  # Son 24 ay?n exog de?erleri
+                                                     -24:])
     forecast_values = forecast.predicted_mean
-
-    # Tahmin sonuçlar?n? sakla
     forecasts[station] = forecast_values
 
-# Tahmin sonuçlar?n? DataFrame'e ekleme
 forecast_df = pd.DataFrame(forecasts).T
 forecast_df.columns = [f'forecast_month_{i + 1}' for i in range(24)]
 
-# Sonuçlar? yazd?rma
 print(forecast_df)
 
-# Test verilerini birle?tirme
 test_data = {month: df for month, df in monthly_dict_with_correlation.items() if month in forecast_months}
 test_data = pd.concat([df for df in test_data.values()])
 
-
-# SMAPE hesaplama fonksiyonu
+# Calculating SMAPE
 def smape(y_true, y_pred):
     return 100 * np.mean(2 * np.abs(y_pred - y_true) / (np.abs(y_true) + np.abs(y_pred)))
 
-
-# SMAPE de?erlerini hesaplama
-# SMAPE hesaplama fonksiyonu
-def smape(y_true, y_pred):
-    return 100 * np.mean(2 * np.abs(y_pred - y_true) / (np.abs(y_true) + np.abs(y_pred)))
-
-
-# Genel SMAPE hesaplama
 all_actual = []
 all_predicted = []
 
 for station in forecast_df.index:
-    # Gerçek de?erleri al
     actual_values = test_data.loc[station, 'Values'].values
     predicted_values = forecast_df.loc[station].values
 
-    # De?erleri listeye ekle
     all_actual.extend(actual_values)
     all_predicted.extend(predicted_values)
 
-# Genel SMAPE de?erini hesapla
 general_smape = smape(np.array(all_actual), np.array(all_predicted))
-print(f"Genel SMAPE: {general_smape:.2f}%")
-# 0.21 %
+print(f"Overall SMAPE: {general_smape:.2f}%")
+# Overall SMAPE: 0.15%
+"""
 
-# Belirli bir istasyon kodu için grafik çizme
-def plot_forecast(station_code):
-    # Gerçek de?erleri al
-    actual_values = test_data.loc[station_code, 'Values'].values
-    predicted_values = forecast_df.loc[station_code].values
-
-    # Tarih aral???n? olu?tur
-    forecast_months = pd.date_range(start='2020-01-01', periods=24, freq='M')
-
-    # Grafik çizimi
-    plt.figure(figsize=(12, 6))
-    plt.plot(forecast_months, actual_values, label='Gerçek De?erler', marker='o')
-    plt.plot(forecast_months, predicted_values, label='Tahmin De?erleri', marker='x')
-    plt.title(f"{station_code} için Gerçek ve Tahmin De?erleri")
-    plt.xlabel("Tarih")
-    plt.ylabel("De?er")
-    plt.legend()
-    plt.grid()
-    plt.show()
-
-
-# Örnek olarak belirli bir istasyon kodu seçme
-station_code_to_plot = '321430'  # Buraya istedi?iniz istasyon kodunu yaz?n
-plot_forecast(station_code_to_plot)
-
-
-############################## Forecasting
-
-with open(os.path.join('Ehyd', 'pkl_files', 'monthly_dict_85to21.pkl'), 'rb') as file:
-    monthly_dict_85to21 = pickle.load(file)
-
+########################################################################################################################
+# Forecasting
+########################################################################################################################
 monthly_dict_final_train = monthly_dict_85to21.copy()
 
-monthly_dict_final_train = {k: v for k, v in monthly_dict_final_train.items() if k >= "2000_01"}
+monthly_dict_final_train = {k: v for k, v in monthly_dict_final_train.items() if k >= "2015_01"}
 
 final_data = pd.concat([df for df in monthly_dict_final_train.values()])
 
-# Her istasyon için 26 ayl?k tahmin yapma
 forecasts_final = {}
 for station in final_data.index.unique():
-    # ?stasyon verilerini al
     station_data = final_data.loc[station]
 
-    # Modeli olu?turma ve e?itme
     model = SARIMAX(
-        station_data['Values'],  # Hedef de?i?ken
-        exog=station_data.drop(columns=['Values']),  # Di?er özellikler
-        order=(1, 0, 1),  # ARIMA parametreleri
-        seasonal_order=(0, 1, 1, 12)  # Mevsimsel ARIMA parametreleri
+        station_data['Values'],
+        exog=station_data.drop(columns=['Values']),
+        order=(1, 0, 1),
+        seasonal_order=(0, 1, 1, 12)
     )
     model_fit = model.fit(disp=False)
 
-    # 26 ayl?k tahmin yap
     forecast = model_fit.get_forecast(steps=26, exog=station_data.drop(columns=['Values']).values[
-                                                     -26:])  # Son 24 ay?n exog de?erleri
+                                                     -26:])
     forecast_values = forecast.predicted_mean
-
-    # Tahmin sonuçlar?n? sakla
     forecasts_final[station] = forecast_values
 
-# Tahmin sonuçlar?n? DataFrame'e ekleme
 forecast_final_df = pd.DataFrame(forecasts_final)
-forecast_final_df.columns = [f'forecast_month_{i + 1}' for i in range(26)]
+forecast_final_df.insert(0, 'date', pd.date_range(start='2022-01-01', end='2024-02-01', freq='MS'))
+csv_columns = pd.read_csv('Ehyd/datasets_ehyd/gw_test_empty.csv', nrows=0).columns.tolist()
+forecast_final_df = forecast_final_df[csv_columns]
 
-# Sonuçlar? yazd?rma
-print(forecast_final_df)
-
-
-
-
-
-######################### eda
-with open(os.path.join('Ehyd', 'pkl_files', 'monthly_dict_85to21.pkl'), 'rb') as file:
-    monthly_dict_85to21 = pickle.load(file)
-
-monthly_dict_final_train = monthly_dict_85to21.copy()
-
-monthly_dict_final_train = {k: v for k, v in monthly_dict_final_train.items() if k >= "2000_01"}
-
-final_data = pd.concat([df for df in monthly_dict_final_train.values()])
-
-# Her istasyon için 26 ayl?k tahmin yapma
-forecasts_final = {}
-for station in final_data.index.unique():
-    # ?stasyon verilerini al
-    station_data = final_data.loc[station]
-
-    # Modeli olu?turma ve e?itme
-    model = SARIMAX(
-        station_data['Values'],  # Hedef de?i?ken
-        exog=station_data.drop(columns=['Values']),  # Di?er özellikler
-        order=(1, 0, 1),  # ARIMA parametreleri
-        seasonal_order=(0, 1, 1, 12)  # Mevsimsel ARIMA parametreleri
-    )
-    model_fit = model.fit(disp=False)
-
-    # 26 ayl?k tahmin yap
-    forecast = model_fit.get_forecast(steps=26, exog=station_data.drop(columns=['Values']).values[
-                                                     -26:])  # Son 24 ay?n exog de?erleri
-    forecast_values = forecast.predicted_mean
-
-    # Tahmin sonuçlar?n? sakla
-    forecasts_final[station] = forecast_values
-
-# Tahmin sonuçlar?n? DataFrame'e ekleme
-forecast_final_df = pd.DataFrame(forecasts_final)
-forecast_final_df.columns = [f'forecast_month_{i + 1}' for i in range(26)]
-
-# Sonuçlar? yazd?rma
-print(forecast_final_df)
+forecast_final_df.to_csv(r"Ehyd\forecast_final.csv", index=False)
