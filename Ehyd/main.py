@@ -317,34 +317,64 @@ def main():
     ########################################################################################################################
     # Imputing NaN Values
     ########################################################################################################################
-    def nan_imputer(dict):
+    def nan_imputer(dataframes):
         """
-        Imputes missing values in a dictionary of DataFrames by filling NaNs with the corresponding monthly means.
+        Imputes missing values in a dictionary of DataFrames by filling NaNs with the corresponding monthly means,
+        and if no means are available, fills them based on the average of the previous and next month's means.
+        Finally, fills any remaining NaN values with 0.
 
         Args:
-            dict (dict): A dictionary where the keys are DataFrame names and the values are DataFrames
-                         containing a 'Values' column with missing values represented as 'NaN'.
+            dataframes (dict): A dictionary where the keys are DataFrame names and the values are DataFrames
+                               containing a 'Values' column with missing values represented as 'NaN'.
 
         Returns:
             dict: A dictionary with the same keys as the input, but with NaN values in each DataFrame
-                  replaced by the monthly mean of the 'Values' column.
+                  replaced by the monthly mean of the 'Values' column, averages of neighboring months, or 0 if no other option is available.
         """
         new_dict = {}
-        for df_name, df in dict.items():
+        for df_name, df in dataframes.items():
             df_copy = df.copy(deep=True)  # Create a deep copy
-            df_copy.replace('NaN', np.nan, inplace=True)
-            first_valid_index = df_copy['Values'].first_valid_index()
-            valid_values = df_copy.loc[first_valid_index:].copy()
+            df_copy = df_copy.replace(['NaN', 'nan'], np.nan)  # Replace any 'NaN' or 'nan' strings with np.nan
+            df_copy.index = pd.to_datetime(df_copy.index)  # Ensure index is in datetime format
+
+            # Calculate monthly means
+            monthly_means = df_copy.groupby(df_copy.index.month)['Values'].mean()
 
             # Fill NaNs with the corresponding monthly means
             for month in range(1, 13):
-                month_mean = valid_values[valid_values.index.month == month]['Values'].dropna().mean()
-                valid_values.loc[valid_values.index.month == month, 'Values'] = valid_values.loc[
-                    valid_values.index.month == month, 'Values'].fillna(month_mean)
+                month_mean = monthly_means.get(month)
+                month_mask = df_copy.index.month == month
 
-            # Update the copied DataFrame with filled values
-            df_copy.update(valid_values)
-            new_dict[df_name] = df_copy  # Store the modified copy
+                # Fill with the monthly mean if available
+                if pd.notna(month_mean):
+                    df_copy.loc[month_mask, 'Values'] = df_copy.loc[month_mask, 'Values'].fillna(month_mean)
+
+            # Fill remaining NaNs based on neighboring months' averages
+            for month in range(1, 13):
+                month_mask = df_copy.index.month == month
+                remaining_nan_mask = month_mask & df_copy['Values'].isna()
+
+                if remaining_nan_mask.any():  # If there are still NaNs in this month
+                    previous_month_mean = monthly_means.get(month - 1) if month > 1 else None
+                    next_month_mean = monthly_means.get(month + 1) if month < 12 else None
+
+                    # Check if previous and next month means are available
+                    if pd.notna(previous_month_mean) and pd.notna(next_month_mean):
+                        # Fill with the average of the previous and next month means
+                        average = (previous_month_mean + next_month_mean) / 2
+                        df_copy.loc[remaining_nan_mask, 'Values'] = average
+                    elif pd.notna(previous_month_mean):
+                        # Use the previous month mean if available
+                        df_copy.loc[remaining_nan_mask, 'Values'] = previous_month_mean
+                    elif pd.notna(next_month_mean):
+                        # Use the next month mean if available
+                        df_copy.loc[remaining_nan_mask, 'Values'] = next_month_mean
+
+            # Son olarak, kalan tüm NaN'lar? 0 ile doldur
+            df_copy['Values'].fillna(0, inplace=True)
+
+            # Doldurulmu? DataFrame'i yeni sözlü?e ekle
+            new_dict[df_name] = df_copy
 
         return new_dict
 
