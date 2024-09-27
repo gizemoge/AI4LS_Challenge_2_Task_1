@@ -3,9 +3,7 @@
 # Importing Libraries and Arranging Console Display.
 import pandas as pd
 import numpy as np
-import itertools
 import os
-import random
 from datetime import datetime
 from scipy.spatial import distance
 from statsmodels.tsa.statespace.sarimax import SARIMAX
