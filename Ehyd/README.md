@@ -1,40 +1,43 @@
 # AI4LS_Challenge
 
-For each geographical location specified in the dataset, the teams are asked to forecast the monthly groundwater level from January 2022 to June 2024
+## Introduction
+This project involves processing multiple CSV files containing time series data from thousands of measurement water stations in Austria??. The data is cleaned, filtered, and merged by geographic coordinates to generate forecasts for a specific geographic location using machine learning models.
 
-## Overview
+The goal is to train models on this data for specific geographic locations and predict the monthly groundwater levels from **January 2022 to June 2024.**
 
-This project forecasts groundwater levels using 10 variables: **groundwater level, groundwater temperature, rainfall, snowfall, source flow rate, source temperature, source sediment levels, surface water levels, surface water temperature, and surface water flow rate.**
+Groundwater levels are forecasted using 11 variables under 4 headings:
 
-It processes and combines data from multiple CSV files containing time series data from different geographic stations. The goal is to train models on this data for specific geographic locations and predict the monthly groundwater levels from **January 2022 to June 2024.**
+**Groundwater:**
+1. Groundwater level,
+2. Groundwater temperature,
 
-The project consists of the following steps:
+**Precipitation:** 
+3. Rainfall,
+4. Snowfall,
 
-1. Data Preprocessing
-2. Data Imputation
-3. Feature Engineering (Adding Lagged Values and Rolling Means)
-4. Model Training
-5. Forecasting Future Values
-6. Installation
+**Water source:**
+5. Source flow rate,
+6. Source temperature,
+7. Source sediment levels,
+8. Source conductivity,
 
+**Surface water:**
+9. Surface water levels,
+10. Surface water temperature, and
+11. Surface water flow rate.
 
+<br>
 
-### Clone the repository:
+## Prerequisites
 
-```bash
-git clone https://github.com/gizemoge/AI4LS_Challenge.git
-cd AI4LS_Challenge
-```
+This project requires Python 3.8+ and the following Python libraries:
 
-
-### Install the required dependencies:
-This project requires Python 3.x and the following Python libraries:
-
-- pandas
-- numpy
-- scikit-learn
-- TensorFlow
-- pickle
+  - pandas 
+  - numpy 
+  - datetime 
+  - scipy 
+  - statsmodels
+  - os
 
 You can install the required dependencies by running:
 
@@ -42,99 +45,109 @@ You can install the required dependencies by running:
 pip install -r requirements.txt
 ```
 
+<br>
 
-### Prepare the dataset:
-The CSV files with raw data should be placed in the appropriate folders under the Ehyd directory as follows:
-- `Ehyd/datasets_ehyd/Groundwater`
-- `Ehyd/datasets_ehyd/Precipitation`
-- `Ehyd/datasets_ehyd/Sources`
-- `Ehyd/datasets_ehyd/Surface_Water`
+## Methodology
+
+### 1. Data Preprocessing
+We downloaded the four datasets from ehyd.gv.at related to groundwater, precipitation, water sources and surface waters in Austria. 
+The folder names have been renamed to their English equivalents, but no changes were made to the files themselves. 
+The measurement data was extracted from the CSV files, and a dictionary was created for each variable. 
+In these dictionaries, the keys represent the date (_year-month_), and the dataframes contain the measurement station IDs as their indices. 
+We obtained the coordinates from the `messstellen_alle` files.
 
 <br>
 
-## Data Preprocessing
+#### Processing Data for a Specific Location
+487 groundwater level measurement stations are forecasted in this document, 
+though the model can forecast the groundwater levels for any and all of the 3792 groundwater measurement stations (as specified in the `messstellen_alle.csv` file located in the Groundwater folder). 
 
-#### Step 1: Load Station Coordinates
-Run the function `station_coordinates()` to load station coordinates for groundwater, precipitation, and other sources:
-
-```bash
-groundwater_all_coordinates = station_coordinates("Groundwater")
-precipitation_coordinates = station_coordinates("Precipitation")
-sources_coordinates = station_coordinates("Sources")
-surface_water_coordinates = station_coordinates("Surface_Water")
-```
-#### Step 2: Process Time Series Data
-For each dataset (e.g., Groundwater, Precipitation), process the data using process_and_store_data():
+To train the model for a specific geographic location, first specify the station IDs for that location in the `gw_test_empty.csv` file. 
+The stations in this file were filtered and processed using the function:
 
 ```bash
-stations_list = [...]  # List of station IDs
 filtered_groundwater_dict, filtered_gw_coordinates = process_and_store_data(
-    os.path.join("Ehyd", "datasets_ehyd", "Groundwater", "Grundwasserstand-Monatsmittel"),
-    groundwater_all_coordinates, "gw_", stations_list)
+    "datasets_ehyd/Groundwater/Grundwasserstand-Monatsmittel",
+    groundwater_all_coordinates, "gw_", station_list)
 ```
 
-This function processes the raw CSV files into structured dataframes and stores them in a dictionary.
+<br>
 
-#### Step 3: Handle Missing Values
-Missing values in the datasets are imputed using monthly means by calling the `nan_imputer()` function:
+####  Merging and Aligning Data Based on Coordinates
+The counts of measurement stations per type (e.g., precipitation or surface water) are not consistent. 
+The `add_nearest_coordinates_column()` function associates each measurement station with its nearest counterparts based on Euclidean distances.
+For some variables, we considered three stations for triangulation, while for others, we selected just one, depending on the number of available measurement points. 
+In this example, the 864 rain measurement stations are enough in number to be triangulated for each of the 3793 groundwater level measurement stations. Thus the three closest rain measurement station IDs were taken:
+
+
+```bash
+data = add_nearest_coordinates_column(rain_coord, 'nearest_rain', 3)
+```
+
+In comparison, there are only 94 water source flowrate measurement stations, and so only one nearest water source flowrate measurement station ID was taken. 
+
+
+<br>
+
+### 2. Data Imputation
+Missing data is handled by the `nan_imputer()` function, which fills the NaN values using monthly averages:
 
 ```bash
 filled_filtered_groundwater_dict = nan_imputer(filtered_groundwater_dict)
 ```
 
-#### Step 4: Feature Engineering
-Add lagged values and rolling means to the datasets to capture temporal patterns:
-
-```bash
-filled_dict_list = [filled_gw_temp_dict, filled_filtered_groundwater_dict, filled_rain_dict, ...]
-for dictionary in filled_dict_list:
-    for key, df in dictionary.items():
-        dictionary[key] = add_lag_and_rolling_mean(df)
-```
-
-#### Step 5: Save Processed Data
-Save the processed and imputed data into pickle files for further use:
-
-```bash
-for dictionary in filled_dict_list:
-    file_path = os.path.join("Ehyd", "pkl_files", f'final_{dict_name}.pkl')
-    save_to_pickle(dictionary, file_path)
-```
 <br>
 
-## Training the Model
-
-To train the model on a specific geographic location, follow these steps:
-
-**1. Select the relevant data for the station:**
-Identify the nearest exogenous data points (e.g., rainfall, temperature) for the selected groundwater station using `find_nearest_coordinates()`.
-
-**2. Prepare the input for the LSTM model:** Use the processed data with lagged values and rolling means as input features for the LSTM model.
-
-**3. Train the model:** Load the prepared data and pass it into an LSTM model using TensorFlow:
+### 3. Feature Engineering
+To prepare data for machine learning models, lags and rolling means are added to the datasets using the function `add_lag_and_rolling_mean()`. 
+Based on our literature review (especially _Sutanto et al., 2024_), this function is defined to compute lagged values (1, 2, 3 months) and a rolling mean (over 6 months) for the dataframes.
+Each dataframe in the filled dictionaries has lagged and rolling mean features added:
 
 ```bash
-model = Sequential()
-model.add(LSTM(units=50, return_sequences=True, input_shape=(X_train.shape[1], X_train.shape[2])))
-model.add(LSTM(units=50))
-model.add(Dense(1))
-model.compile(optimizer='adam', loss='mean_squared_error')
-
-# Train the model
-model.fit(X_train, y_train, epochs=100, batch_size=32, validation_data=(X_val, y_val))
+df = add_lag_and_rolling_mean(filled_dict['groundwater'])
 ```
+
+
+
+Two dictionaries are then created:
+- `new_dataframes` is a dictionary storing DataFrames of each measurement station, containing all original and engineered features monthly from January 2022 to June 2024. The keys are the measurement station IDs, and the values are dataframes.
+- `monthly_dataframes` contains dataframes that are monthly snapshots of all measurement stations combined, created by processing the data from `new_dataframes`. In this dictionary, the keys represent months
+                        instead of measurement station IDs.
+
+Data is compiled monthly for the years between 1985 and 2021 in the `monthly_dict_85to21` dictionary, allowing for a consolidated view of the data. 
+The data is filtered to start from 1985 instead of 1960 to reduce the amount of imputed synthetic data, which is concentrated in the earlier years.
+
+
+Lastly, an average correlation feature selection method is applied to identify features that correlate significantly with the target variable, groundwater level. 
+Features with an absolute correlation above a definable threshold (10% by default, 40% in this document) are selected for further analysis.
+
+
 <br>
 
-## Obtaining Forecasts
-
-Once the model is trained, you can use it to forecast future groundwater levels:
-
-```bash
-forecasts = model.predict(X_test)
-```
-
-Save the forecasts to a file for later use:
+### 4. Model Training
+The SARIMAX (Seasonal Autoregressive Integrated Moving Average with eXogenous variables) model is used for forecasting. It accounts for both seasonal and non-seasonal factors in the time series data.
 
 ```bash
-np.savetxt('forecasts.csv', forecasts, delimiter=',')
+model = SARIMAX(
+    station_data['Values'],
+    exog=station_data.drop(columns=['Values']),
+    order=(1, 0, 1),
+    seasonal_order=(0, 1, 1, 12)
+)
+model_fit = model.fit(disp=False)
 ```
+
+
+
+### 5. Forecasting Future Values
+The model forecasts the next 26 time steps (months) for the given groundwater level measurement stations using the fitted model. 
+The exogenous variables from the last 26 observations are used to improve forecast accuracy.
+
+The forecasted values are compiled into a DataFrame and saved to a CSV file named `forecast_final.csv`.
+
+<br>
+
+
+
+## References
+Sutanto, S. J., Syaehuddin, W. A., & de Graaf, I. (2024). Hydrological drought forecasts using precipitation data depend on catchment properties and human activities. Communications Earth & Environment, 5, Article 118. https://doi.org/10.1038/s43247-024-01295-w
