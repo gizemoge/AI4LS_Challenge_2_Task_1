@@ -131,9 +131,7 @@ The SARIMAX (Seasonal Autoregressive Integrated Moving Average with eXogenous va
 From the `monthly_dict_85to21` dictionary, 5 years' worth of the data from `'2015_01'` to `'2019_12'` are taken as the train set, and 24 months from `'2020_01'` to `'2021_12'` as the validation set. 
 Other start and cut-off dates can also be set.
 
-
-Hyperparameter optimization was performed, aiming to determine the optimal order and seasonal order by calculating the Akaike Information Criterion (AIC) for 10 randomly sampled DataFrames, ultimately printing the best results. This process involves evaluating various parameter combinations to identify the model that provides the best balance between fit and complexity.
-The sample size can be adjusted as needed.
+Hyperparameter optimization is performed, aiming to determine the optimal order and seasonal order by calculating the Akaike Information Criterion (AIC) for 10 randomly sampled DataFrames, ultimately printing the best results. This process involves evaluating various parameter combinations to identify the model that provides the best balance between fit and complexity, and the sample size can be adjusted as needed.
 
 After hyperparameter optimization, a **SMAPE score of 0.15** is obtained for the validation set, and this optimized model is selected for the final forecasting.
 
