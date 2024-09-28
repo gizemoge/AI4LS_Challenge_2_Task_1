@@ -8,23 +8,23 @@ The goal is to train models on this data for specific geographic locations and p
 Groundwater levels are forecasted using 11 variables under 4 headings:
 
 **Groundwater:**
-1- Groundwater level,
-2- Groundwater temperature,
+<br>1- Groundwater level,
+<br>2- Groundwater temperature,
 
 **Precipitation:**
-3- Rainfall,
-4. Snowfall,
+<br>3- Rainfall,
+<br>4- Snowfall,
 
 **Water source:**
-5. Source flow rate,
-6. Source temperature,
-7. Source sediment levels,
-8. Source conductivity,
+<br>5- Source flow rate,
+<br>6- Source temperature,
+<br>7- Source sediment levels,
+<br>8- Source conductivity,
 
 **Surface water:**
-9. Surface water levels,
-10. Surface water temperature, and
-11. Surface water flow rate.
+<br>9- Surface water levels,
+<br>10- Surface water temperature, and
+<br>11- Surface water flow rate.
 
 <br>
 
