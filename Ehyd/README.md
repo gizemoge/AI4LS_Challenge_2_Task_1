@@ -152,7 +152,10 @@ model_fit = model.fit(disp=False)
 The model forecasts the next 30 time steps (months) for the given groundwater level measurement stations using the fitted model. 
 The exogenous variables from the last 30 observations are used to improve forecast accuracy.
 
-The forecasted values are compiled into a DataFrame and saved to a CSV file named `forecast_final.csv`.
+The forecasted values are compiled into a DataFrame and saved to a CSV file under the `groundwater_forecasts` directory.
+The team's submission for this challenge is named `forecast_submitted_hydroscope.csv`.
+
+When the main script is run, a new CSV file of the forecasted values will be created under the same directory with the current date appended to its name.
 
 <br>
 
