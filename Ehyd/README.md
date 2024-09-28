@@ -1,7 +1,7 @@
 # AI4LS_Challenge
 
 ## Introduction
-This project involves processing multiple CSV files containing time series data from thousands of measurement water stations in Austria??. The data is cleaned, filtered, and merged by geographic coordinates to generate forecasts for a specific geographic location using machine learning models.
+This project involves processing multiple CSV files containing time series data from thousands of measurement water stations in :austria:. The data is cleaned, filtered, and merged by geographic coordinates to generate forecasts for a specific geographic location using machine learning models.
 
 The goal is to train models on this data for specific geographic locations and predict the monthly groundwater levels from **January 2022 to June 2024.**
 
