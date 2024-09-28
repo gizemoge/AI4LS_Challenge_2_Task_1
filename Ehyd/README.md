@@ -1,4 +1,4 @@
-# AI4LS_Challenge
+# AI4LS_Challenge: Task 1
 
 ## Introduction
 This project involves processing multiple CSV files containing time series data from thousands of measurement water stations in Austria ![Austria](https://raw.githubusercontent.com/stevenrskelton/flag-icon/master/png/16/country-4x3/at.png "Austria"). The data is cleaned, filtered, and merged by geographic coordinates to generate forecasts for a specific geographic location using machine learning models.
@@ -28,7 +28,7 @@ Groundwater levels are forecasted using 11 variables under 4 headings:
 
 <br>
 
-## Prerequisites
+## Setup
 
 This project requires Python 3.8+ and the following Python libraries:
 
@@ -39,9 +39,11 @@ This project requires Python 3.8+ and the following Python libraries:
   - statsmodels
   - os
 
-You can install the required dependencies by running:
+You can clone the repository, navigate to the project directory, and install the necessary dependencies by running:
 
 ```bash
+git clone https://github.com/gizemoge/AI4LS_Challenge.git
+cd AI4LS_Challenge
 pip install -r requirements.txt
 ```
 
