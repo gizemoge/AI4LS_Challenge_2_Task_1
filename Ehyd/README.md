@@ -11,7 +11,8 @@ Groundwater levels are forecasted using 11 variables under 4 headings:
 1. Groundwater level,
 2. Groundwater temperature,
 
-**Precipitation:** 
+**Precipitation:**
+<br>
 3. Rainfall,
 4. Snowfall,
 
