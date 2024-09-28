@@ -101,7 +101,7 @@ filled_filtered_groundwater_dict = nan_imputer(filtered_groundwater_dict)
 
 ### 3. Feature Engineering
 To prepare data for machine learning models, lags and rolling means are added to the datasets using the function `add_lag_and_rolling_mean()`. 
-Based on our literature review (especially _Sutanto et al., 2024_), this function is defined to compute lagged values (1, 2, 3 months) and a rolling mean (over 6 months) for the dataframes.
+Based on our literature review (particularly _Sutanto et al., 2024_), this function is defined to compute lagged values (1, 2, 3 months) and a rolling mean (over 6 months) for the dataframes.
 Each dataframe in the filled dictionaries has lagged and rolling mean features added:
 
 ```bash
