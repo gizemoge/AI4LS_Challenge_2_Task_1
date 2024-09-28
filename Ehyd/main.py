@@ -720,8 +720,11 @@ def main():
     csv_columns = pd.read_csv('datasets_ehyd/gw_test_empty.csv', nrows=0).columns.tolist()
     forecast_final_df = forecast_final_df[csv_columns]
 
-    forecast_final_df.to_csv("forecast_final.csv", index=False)
-    print("--------------------- forecast_final.csv: Complete")
+    current_date = datetime.now()
+    file_path = f"groundwater_forecasts/forecast_{current_date}.csv"
+
+    forecast_final_df.to_csv(file_path, index=False)
+    print(f"--------------------- 'forecast_{current_date}.csv' is created under 'groundwater_forecasts' directory.")
 
 if __name__ == "__main__":
     main()
