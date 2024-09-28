@@ -541,8 +541,9 @@ def main():
 
         return selected_features
 
-    common_features = average_correlation_feature_selection(monthly_dict_85to21, threshold=0.4)  # 39
+    common_features = average_correlation_feature_selection(monthly_dict_85to21, threshold=0.4)
     """
+    # This commented section includes hyperparameter optimization; therefore, it is not explicitly added to the pipeline.
     new_start_date = pd.to_datetime('1985-01-01')
     
     adjusted_dataframes = {}
@@ -709,13 +710,13 @@ def main():
         )
         model_fit = model.fit(disp=False)
 
-        forecast = model_fit.get_forecast(steps=26, exog=station_data.drop(columns=['Values']).values[
-                                                         -26:])
+        forecast = model_fit.get_forecast(steps=30, exog=station_data.drop(columns=['Values']).values[
+                                                         -30:])
         forecast_values = forecast.predicted_mean
         forecasts_final[station] = forecast_values
 
     forecast_final_df = pd.DataFrame(forecasts_final)
-    forecast_final_df.insert(0, 'date', pd.date_range(start='2022-01-01', end='2024-02-01', freq='MS'))
+    forecast_final_df.insert(0, 'date', pd.date_range(start='2022-01-01', end='2024-06-01', freq='MS'))
     csv_columns = pd.read_csv('datasets_ehyd/gw_test_empty.csv', nrows=0).columns.tolist()
     forecast_final_df = forecast_final_df[csv_columns]
 

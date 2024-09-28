@@ -50,11 +50,11 @@ pip install -r requirements.txt
 ## Methodology
 
 ### 1. Data Preprocessing
-We downloaded the four datasets from ehyd.gv.at related to groundwater, precipitation, water sources and surface waters in Austria. 
-The folder names have been renamed to their English equivalents, but no changes were made to the files themselves. 
-The measurement data was extracted from the CSV files, and a dictionary was created for each variable. 
+The four datasets from `ehyd.gv.at` related to groundwater, precipitation, water sources and surface waters in Austria are downloaded into the provided data structure. 
+The folder names are renamed to their English equivalents, but no changes are made to the files themselves. 
+The measurement data is extracted from the CSV files, and a dictionary is created for each variable. 
 In these dictionaries, the keys represent the date (_year-month_), and the dataframes contain the measurement station IDs as their indices. 
-We obtained the coordinates from the `messstellen_alle` files.
+The coordinates are obtained from the `messstellen_alle` files.
 
 <br>
 
@@ -63,7 +63,7 @@ We obtained the coordinates from the `messstellen_alle` files.
 though the model can forecast the groundwater levels for any and all of the 3792 groundwater measurement stations (as specified in the `messstellen_alle.csv` file located in the Groundwater folder). 
 
 To train the model for a specific geographic location, first specify the station IDs for that location in the `gw_test_empty.csv` file. 
-The stations in this file were filtered and processed using the function:
+The stations are filtered and processed using the function:
 
 ```bash
 filtered_groundwater_dict, filtered_gw_coordinates = process_and_store_data(
@@ -76,15 +76,16 @@ filtered_groundwater_dict, filtered_gw_coordinates = process_and_store_data(
 ####  Merging and Aligning Data Based on Coordinates
 The counts of measurement stations per type (e.g., precipitation or surface water) are not consistent. 
 The `add_nearest_coordinates_column()` function associates each measurement station with its nearest counterparts based on Euclidean distances.
-For some variables, we considered three stations for triangulation, while for others, we selected just one, depending on the number of available measurement points. 
-In this example, the 864 rain measurement stations are enough in number to be triangulated for each of the 3793 groundwater level measurement stations. Thus the three closest rain measurement station IDs were taken:
+For some variables, this document selects three stations for triangulation, while for others, just one is selected, depending on the number of available measurement stations. 
+
+In this example, the 864 rain measurement stations are enough in number to be triangulated for each of the 3793 groundwater level measurement stations. Thus the three closest rain measurement station IDs are selected:
 
 
 ```bash
 data = add_nearest_coordinates_column(rain_coord, 'nearest_rain', 3)
 ```
 
-In comparison, there are only 94 water source flowrate measurement stations, and so only one nearest water source flowrate measurement station ID was taken. 
+In comparison, there are only 94 water source flowrate measurement stations, and so only one nearest water source flowrate measurement station ID is taken. 
 
 
 <br>
@@ -125,7 +126,12 @@ Features with an absolute correlation above a definable threshold (10% by defaul
 <br>
 
 ### 4. Model Training
-The SARIMAX (Seasonal Autoregressive Integrated Moving Average with eXogenous variables) model is used for forecasting. It accounts for both seasonal and non-seasonal factors in the time series data.
+The SARIMAX (Seasonal Autoregressive Integrated Moving Average with eXogenous variables) model is used for forecasting as it accounts for both seasonal and non-seasonal factors in the time series data.
+
+From the `monthly_dict_85to21` dictionary, 5 years' worth of the data from `'2015_01'` to `'2019_12'` are taken as the train set, and 24 months from `'2020_01'` to `'2021_12'` as the validation set. 
+Other start and cut-off dates can also be set.
+
+After hyperparameter optimization, a **SMAPE score of 0.15** is obtained for the validation set, and this optimized model is selected for the final forecasting.
 
 ```bash
 model = SARIMAX(
@@ -140,8 +146,8 @@ model_fit = model.fit(disp=False)
 
 
 ### 5. Forecasting Future Values
-The model forecasts the next 26 time steps (months) for the given groundwater level measurement stations using the fitted model. 
-The exogenous variables from the last 26 observations are used to improve forecast accuracy.
+The model forecasts the next 30 time steps (months) for the given groundwater level measurement stations using the fitted model. 
+The exogenous variables from the last 30 observations are used to improve forecast accuracy.
 
 The forecasted values are compiled into a DataFrame and saved to a CSV file named `forecast_final.csv`.
 
