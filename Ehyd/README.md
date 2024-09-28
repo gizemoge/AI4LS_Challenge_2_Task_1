@@ -30,15 +30,6 @@ Groundwater levels are forecasted using 11 variables under 4 headings:
 
 ## Setup
 
-This project requires Python 3.8+ and the following Python libraries:
-
-  - pandas 
-  - numpy 
-  - datetime 
-  - scipy 
-  - statsmodels
-  - os
-
 You can clone the repository, navigate to the project directory, and install the necessary dependencies by running:
 
 ```bash
