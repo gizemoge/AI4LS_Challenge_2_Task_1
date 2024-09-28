@@ -35,7 +35,7 @@ def station_coordinates(input):
 def to_dataframe(folder_path, tip_coordinates):
     """
     Processes CSV files in the specified folder, skipping header information and creating DataFrames
-    from the section marked by "Werte". Converts "Lücke" (Gap) values to NaN and skips rows with
+    from the section marked by "Werte". Converts "LÃ¼cke" (Gap) values to NaN and skips rows with
     invalid data or specific keywords.
 
     For each CSV file, it extracts data starting after the "Werte:" line, processes date and value
@@ -203,8 +203,8 @@ def main():
         ("NS-Tagessummen", "snow_")]
 
     source_folders = [
-        ("Quellschüttung-Tagesmittel", "source_fr_"),
-        ("Quellleitfähigkeit-Tagesmittel", "conductivity_"),
+        ("QuellschÃ¼ttung-Tagesmittel", "source_fr_"),
+        ("QuellleitfÃ¤higkeit-Tagesmittel", "conductivity_"),
         ("Quellwassertemperatur-Tagesmittel", "source_temp_")]
 
     surface_water_folders = [
@@ -370,10 +370,10 @@ def main():
                         # Use the next month mean if available
                         df_copy.loc[remaining_nan_mask, 'Values'] = next_month_mean
 
-            # Son olarak, kalan tüm NaN'lar? 0 ile doldur
+            # Son olarak, kalan tÃ¼m NaN'lar? 0 ile doldur
             df_copy['Values'].fillna(0, inplace=True)
 
-            # Doldurulmu? DataFrame'i yeni sözlü?e ekle
+            # Doldurulmu? DataFrame'i yeni sÃ¶zlÃ¼?e ekle
             new_dict[df_name] = df_copy
 
         return new_dict
@@ -720,7 +720,7 @@ def main():
     csv_columns = pd.read_csv('datasets_ehyd/gw_test_empty.csv', nrows=0).columns.tolist()
     forecast_final_df = forecast_final_df[csv_columns]
 
-    current_date = datetime.now()
+    current_date = datetime.today().strftime('%Y_%m_%d')
     file_path = f"groundwater_forecasts/forecast_{current_date}.csv"
 
     forecast_final_df.to_csv(file_path, index=False)
