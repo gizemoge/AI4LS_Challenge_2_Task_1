@@ -9,10 +9,10 @@ warnings.filterwarnings("ignore")
 # GRACE
 ########################################################################################################################
 # Opening .nc data files and converting the variables from these files into dataframes
-df_land = xr.open_dataset('supplemental_material_for_task_2/datasets/(3)CSR_GRACE_GRACE-FO_RL06_Mascons_v02_LandMask.nc')
+df_land = xr.open_dataset('supplemental_material_for_task_2/datasets/CSR_GRACE_GRACE-FO_RL06_Mascons_v02_LandMask.nc')
 df_land = df_land['LO_val'].to_dataframe().reset_index()
 
-df_lwe = xr.open_dataset('supplemental_material_for_task_2/datasets/(10)CSR_GRACE_GRACE-FO_RL0602_Mascons_all-corrections.nc')
+df_lwe = xr.open_dataset('supplemental_material_for_task_2/datasets/CSR_GRACE_GRACE-FO_RL0602_Mascons_all-corrections.nc')
 df_lwe = df_lwe["lwe_thickness"].to_dataframe().reset_index()
 
 # Reducing the df_lwe dataframe based on the land mask
