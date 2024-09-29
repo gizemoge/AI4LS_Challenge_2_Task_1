@@ -1,7 +1,10 @@
 import pandas as pd
+import numpy as np
 import xarray as xr
 import pickle
-import numpy as np
+import requests
+import os
+import re
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -38,9 +41,7 @@ df['time'] = pd.Series(filtered_months).repeat(df.shape[0] // len(filtered_month
 
 # GRACE after 2010.01 in time column
 df = df[df['time'] >= '2010-01']
-
 df['lon'] = df['lon'].apply(lambda x: x - 360 if x > 180 else x)
-
 df.reset_index(drop=True, inplace=True)
 
 # Checking whether coordinates are same for each month
@@ -59,8 +60,132 @@ for month, is_equal in results.items():
 ########################################################################################################################
 # GLDAS
 ########################################################################################################################
-with open('supplemental_material_for_task_2/pkl_files/gldas_dict_2010_2024.pkl', 'rb') as file:
-    gldas_dict_2010_2024 = pickle.load(file)
+
+def load_gldas_dict_2004_2009():
+    # 1. Fetch data between 2004-2009 to match GRACE's averaged format
+    file_path = "supplemental_material_for_task_2/datasets/2004_2009_avg_gldas_noah_2209.txt"
+    ds_dict = {}
+    with open(file_path, "r") as f:
+        # Skip the first line
+        next(f)
+
+        for line in f:
+            url = line.strip()
+            match = re.search(r'(\d{6})\.\d+\.nc4', url)
+            if match:
+                date = match.group(1)
+            else:
+                print(f'No date found in URL: {url}')
+                continue
+
+            print(f'Downloading {url}...')
+            try:
+                response = requests.get(url)
+                response.raise_for_status()  # Check for request errors
+
+                temp_file_name = f"temp_{date}.nc4"
+                with open(temp_file_name, 'wb') as temp_file:
+                    temp_file.write(response.content)
+
+                ds_dict[date] = xr.open_dataset(temp_file_name)
+                os.remove(temp_file_name)
+                print(f'Dataset for {date} added to dictionary.')
+
+            except requests.exceptions.RequestException as e:
+                print(f'Error downloading {url}: {e}')
+            except Exception as e:
+                print(f'Error processing file {temp_file_name}: {e}')
+
+    print('All files processed!')
+
+    for key, value in ds_dict.items():
+        ds_dict[key] = value.load()
+
+    ds = ds_dict["200401"]
+    variables = list(ds.data_vars)[1:]
+    monthly_gldas_2004_2009 = {}
+
+    for key, value in ds_dict.items():
+        df = pd.DataFrame()
+
+        for feature in variables:
+            data_array = value[feature]
+            feature_df = data_array.to_dataframe().reset_index().drop("time", axis=1)
+            feature_df = feature_df.dropna(subset=[f"{feature}"])
+
+            if df.empty:
+                df = feature_df
+            else:
+                df = df.merge(feature_df, on=["lat", "lon"])
+
+        monthly_gldas_2004_2009[key] = df.reset_index(drop=True)
+    return monthly_gldas_2004_2009
+
+
+def load_gldas_dict_2010_2024():
+    # 2. Fetch data between 2010-2024 for data analysis
+    file_path = "supplemental_material_for_task_2/datasets/subset_GLDAS_NOAH025_M_2.1_20240918_193208_.txt"
+    ds_dict = {}
+    with open(file_path, "r") as f:
+        # Skip the first line
+        next(f)
+
+        for line in f:
+            url = line.strip()
+            match = re.search(r'(\d{6})\.\d+\.nc4', url)
+            if match:
+                date = match.group(1)
+            else:
+                print(f'No date found in URL: {url}')
+                continue
+
+            print(f'Downloading {url}...')
+            try:
+                response = requests.get(url)
+                response.raise_for_status()  # Check for request errors
+
+                temp_file_name = f"temp_{date}.nc4"
+                with open(temp_file_name, 'wb') as temp_file:
+                    temp_file.write(response.content)
+
+                ds_dict[date] = xr.open_dataset(temp_file_name)
+                os.remove(temp_file_name)
+                print(f'Dataset for {date} added to dictionary.')
+
+            except requests.exceptions.RequestException as e:
+                print(f'Error downloading {url}: {e}')
+            except Exception as e:
+                print(f'Error processing file {temp_file_name}: {e}')
+
+    print('All files processed!')
+
+    for key, value in ds_dict.items():
+        ds_dict[key] = value.load()
+
+    ds = ds_dict["201210"]
+    variables = list(ds.data_vars)[1:]
+    gldas_dict_2010_2024 = {}
+
+    for key, value in ds_dict.items():
+        df = pd.DataFrame()
+
+        for feature in variables:
+            data_array = value[feature]
+            feature_df = data_array.to_dataframe().reset_index().drop("time", axis=1)
+            feature_df = feature_df.dropna(subset=[f"{feature}"])
+
+            if df.empty:
+                df = feature_df
+            else:
+                df = df.merge(feature_df, on=["lat", "lon"])
+
+        gldas_dict_2010_2024[key] = df.reset_index(drop=True)
+
+    return gldas_dict_2010_2024
+
+
+gldas_dict_2004_2009 = load_gldas_dict_2004_2009()
+gldas_dict_2010_2024 = load_gldas_dict_2010_2024()
 
 # Checking whether coordinates are same for each month
 coordinates_per_df_gldas = [set(zip(df['lat'], df['lon'])) for df in gldas_dict_2010_2024.values()]
@@ -69,6 +194,7 @@ if all_same:
     print("Yes")
 else:
     print("No")
+
 
 ########################################################################################################################
 # Further Feature Engineering
@@ -83,26 +209,18 @@ filtered_dfs = {}
 
 for key, dataframe in gldas_dict_2010_2024.items():
     dataframe['coord_tuple'] = list(zip(dataframe['lat'], dataframe['lon']))
-
     filtered_df = dataframe[dataframe['coord_tuple'].apply(lambda x: x in intersection_set)]
-
     filtered_dfs[key] = filtered_df.drop(columns=['coord_tuple'])
 
 for key, dataframe in filtered_dfs.items():
     dataframe.reset_index(drop=True, inplace=True)
 
 # Editing the coordinates in GRACE according to the intersection set
-gizmo = df.groupby('time', group_keys=False).apply(lambda group: group[group[['lat', 'lon']].apply(tuple, axis=1).isin(intersection_set)])
-
+df = df.groupby('time', group_keys=False).apply(lambda group: group[group[['lat', 'lon']].apply(tuple, axis=1).isin(intersection_set)])
 df.reset_index(drop=True, inplace=True)
-
 
 # with open("supplemental_material_for_task_2/pkl_files/df.pkl", "wb") as f:
 #     pickle.dump(df, f)
-
-# with open('supplemental_material_for_task_2/pkl_files/df.pkl', 'rb') as file:
-#     df = pickle.load(file)
-
 
 # Filling in the missing months in the dataframe and assigning nan values to the lew_thickness columns.
 df['time'] = pd.to_datetime(df['time'])
@@ -127,7 +245,6 @@ df_filled_corrected = pd.concat([df, missing_data]).drop_duplicates(subset=['tim
 
 # GRACE: dataframe to dictionary
 df_filled_corrected['key'] = df_filled_corrected['time'].dt.strftime('%Y%m')
-
 result_dict = {key: group.drop(columns='key') for key, group in df_filled_corrected.groupby('key')}
 
 for key, value in result_dict.items():
@@ -156,41 +273,30 @@ for month_key, month_df in result_dict.items():
                 month_df.at[i, 'lwe_thickness'] = average_value
 
 
-# Creating .pkl file of the dictionary
 # with open('supplemental_material_for_task_2/pkl_files/grace_imputed_in_dict.pkl', 'wb') as f:
 #     pickle.dump(result_dict, f)
 
-
 # Merging Gldas and GRACE datasets
-with open("supplemental_material_for_task_2/pkl_files/gldas_dict_2010_2024.pkl", "rb") as f:
-    gldas_dict_2010_2024 = pickle.load(f)
 
-with open("supplemental_material_for_task_2/pkl_files/grace_imputed_in_dict.pkl", "rb") as f:
-    grace_dict = pickle.load(f)
+gldas_dict_2010_2024.pop('202405', None)
 
-with open("supplemental_material_for_task_2/pkl_files/gldas_dict_2004_2009.pkl", "rb") as f:
-    gldas_dict_2004_2009 = pickle.load(f)
+########################################################################################################################
+# MERGING GRACE AND GLDAS
+########################################################################################################################
+for key in gldas_dict_2010_2024.keys():
+    gldas_df = gldas_dict_2010_2024[key]
+    grace_df = result_dict[key]
+
+    if grace_df is not None:
+        merged_df = gldas_df.merge(grace_df[['lat', 'lon', 'lwe_thickness']], on=['lat', 'lon'], how='inner')
+        gldas_dict_2010_2024[key] = merged_df
+
 
 with open('supplemental_material_for_task_2/pkl_files/intersection_set.pkl', 'rb') as file:
     intersection_set = pickle.load(file)
 
-gldas_dict_2010_2024.pop('202405', None)
-
-# Merging supplemental_material_for_task_2 and Gldas
-for key in gldas_dict_2010_2024.keys():
-
-    gldas_df = gldas_dict_2010_2024[key]
-    grace_df = grace_dict[key]
-
-    if grace_df is not None:
-        merged_df = gldas_df.merge(grace_df[['lat', 'lon', 'lwe_thickness']], on=['lat', 'lon'], how='inner')
-
-        gldas_dict_2010_2024[key] = merged_df
-
-
 filtered_dict = {}
 for key, df in gldas_dict_2004_2009.items():
-
     filtered_df = df[df[['lat', 'lon']].apply(tuple, axis=1).isin(intersection_set)]
     filtered_dict[key] = filtered_df
 
@@ -218,7 +324,7 @@ def process_data(dict):
     results_dict = {}
 
     for key, df in dict.items():
-        results_dict[key] = reduce_to_first_of_209(df)
+        results_dict[key] = reduce_to_first_of_19(df)
         results_dict[key].reset_index(drop=True, inplace=True)
 
     for month, df in results_dict.items():
@@ -343,10 +449,10 @@ for key, df in results_dict_2010_2024.items():
 # with open('supplemental_material_for_task_2/pkl_files/new_1151_test_dict.pkl', 'wb') as file:
 #     pickle.dump(test_dict, file)
 #
-# with open('supplemental_material_for_task_2/pkl_files/train_dict.pkl', 'rb') as file:
+# with open('supplemental_material_for_task_2/pkl_files/new_12661_train_dict.pkl', 'rb') as file:
 #     train_dict = pickle.load(file)
 #
-# with open('supplemental_material_for_task_2/pkl_files/test_dict.pkl', 'rb') as file:
+# with open('supplemental_material_for_task_2/pkl_files/new_12661_test_dict.pkl', 'rb') as file:
 #     test_dict = pickle.load(file)
 
 
@@ -356,7 +462,6 @@ for key, df in results_dict_2010_2024.items():
 lat_values = [df['lat'].values for df in test_dict.values()]
 lon_values = [df['lon'].values for df in test_dict.values()]
 
-# Kontrol sonuçlar?n? yazd?rma
 for i in range(len(lat_values)):
     for j in range(i + 1, len(lat_values)):
         lat_equal = (lat_values[i] == lat_values[j]).all()
@@ -382,3 +487,8 @@ for i in range(len(lat_values)):
 
         if not lon_equal:
             print(f"df{i + 1} ve df{j + 1}: 'lon' columns are the same.")
+
+########################################################################################################################
+# MODEL
+########################################################################################################################
+
