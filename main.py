@@ -238,6 +238,7 @@ def main():
     # Gathering associated additional features for required 487 stations
     ########################################################################################################################
     print("Finding nearest stations based on coordinates.")
+
     def calculate_distance(coord1, coord2):
         """
         Calculates the Euclidean distance between two points in a Cartesian coordinate system.
