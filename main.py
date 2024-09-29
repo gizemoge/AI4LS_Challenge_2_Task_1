@@ -1,4 +1,4 @@
-# -*- coding: iso-8859-1 -*-
+# -*- coding: utf-8 -*-
 
 # Importing Libraries and Arranging Console Display.
 import pandas as pd
@@ -26,7 +26,7 @@ def station_coordinates(input):
     Returns:
         df: A DataFrame containing columns "x", "y", and "hzbnr01".
     """
-    df = pd.read_csv(f"datasets_ehyd/{input}/messstellen_alle.csv", sep=";")
+    df = pd.read_csv(f"Ehyd/datasets_ehyd/{input}/messstellen_alle.csv", sep=";")
     output_df = df[["x", "y", "hzbnr01"]].copy()
     output_df['x'] = output_df['x'].astype(str).str.replace(',', '.').astype("float32")
     output_df['y'] = output_df['y'].astype(str).str.replace(',', '.').astype("float32")
@@ -192,7 +192,8 @@ def main():
     ########################################################################################################################
     # Creating Dataframes from given CSVs
     ########################################################################################################################
-    # Define paths and coordinates
+    print("\n---------- Data Preprocessing ----------")
+
     groundwater_all_coordinates = station_coordinates("Groundwater")
     precipitation_coordinates = station_coordinates("Precipitation")
     sources_coordinates = station_coordinates("Sources")
@@ -214,27 +215,29 @@ def main():
         ("Q-Tagesmittel", "surface_water_fr_")]
 
     # Groundwater Dictionary (Filtered down to the requested 487 stations)
-    stations = pd.read_csv("datasets_ehyd/gw_test_empty.csv")
+    stations = pd.read_csv("Ehyd/datasets_ehyd/gw_test_empty.csv")
     station_list = [col for col in stations.columns[1:]]
     filtered_groundwater_dict, filtered_gw_coordinates = process_and_store_data(
-        "datasets_ehyd/Groundwater/Grundwasserstand-Monatsmittel",
+        "Ehyd/datasets_ehyd/Groundwater/Grundwasserstand-Monatsmittel",
         groundwater_all_coordinates, "gw_", station_list)
 
-    gw_temp_dict, gw_temp_coordinates = process_and_store_data(os.path.join("datasets_ehyd", "Groundwater", "Grundwassertemperatur-Monatsmittel"), groundwater_all_coordinates, "gwt_")
-    rain_dict, rain_coord = process_and_store_data(os.path.join("datasets_ehyd", "Precipitation", precipitation_folders[0][0]), precipitation_coordinates, "rain_")
-    snow_dict, snow_coord = process_and_store_data(os.path.join("datasets_ehyd", "Precipitation", precipitation_folders[1][0]), precipitation_coordinates, "snow_")
-    source_fr_dict, source_fr_coord = process_and_store_data(os.path.join("datasets_ehyd", "Sources", source_folders[0][0]), sources_coordinates, "source_fr_")
-    conduct_dict, conduct_coord = process_and_store_data(os.path.join("datasets_ehyd", "Sources", source_folders[1][0]), sources_coordinates, "conduct_")
-    source_temp_dict, source_temp_coord = process_and_store_data(os.path.join("datasets_ehyd", "Sources", source_folders[2][0]), sources_coordinates, "source_temp_")
-    surface_water_lvl_dict, surface_water_lvl_coord = process_and_store_data(os.path.join("datasets_ehyd", "Surface_Water", surface_water_folders[0][0]), surface_water_coordinates, "surface_water_lvl_")
-    surface_water_temp_dict, surface_water_temp_coord = process_and_store_data(os.path.join("datasets_ehyd", "Surface_Water", surface_water_folders[1][0]), surface_water_coordinates, "surface_water_temp_")
-    sediment_dict, sediment_coord = process_and_store_data(os.path.join("datasets_ehyd", "Surface_Water", surface_water_folders[2][0]), surface_water_coordinates, "sediment_")
-    surface_water_fr_dict, surface_water_fr_coord = process_and_store_data(os.path.join("datasets_ehyd", "Surface_Water", surface_water_folders[3][0]), surface_water_coordinates, "surface_water_fr_")
+    print("Processing and storing DataFrames.")
 
-    print("--------------------- DataFrame process and store: Complete")
+    gw_temp_dict, gw_temp_coordinates = process_and_store_data(os.path.join("Ehyd","datasets_ehyd", "Groundwater", "Grundwassertemperatur-Monatsmittel"), groundwater_all_coordinates, "gwt_")
+    rain_dict, rain_coord = process_and_store_data(os.path.join("Ehyd","datasets_ehyd", "Precipitation", precipitation_folders[0][0]), precipitation_coordinates, "rain_")
+    snow_dict, snow_coord = process_and_store_data(os.path.join("Ehyd","datasets_ehyd", "Precipitation", precipitation_folders[1][0]), precipitation_coordinates, "snow_")
+    source_fr_dict, source_fr_coord = process_and_store_data(os.path.join("Ehyd","datasets_ehyd", "Sources", source_folders[0][0]), sources_coordinates, "source_fr_")
+    conduct_dict, conduct_coord = process_and_store_data(os.path.join("Ehyd","datasets_ehyd", "Sources", source_folders[1][0]), sources_coordinates, "conduct_")
+    source_temp_dict, source_temp_coord = process_and_store_data(os.path.join("Ehyd","datasets_ehyd", "Sources", source_folders[2][0]), sources_coordinates, "source_temp_")
+    surface_water_lvl_dict, surface_water_lvl_coord = process_and_store_data(os.path.join("Ehyd","datasets_ehyd", "Surface_Water", surface_water_folders[0][0]), surface_water_coordinates, "surface_water_lvl_")
+    surface_water_temp_dict, surface_water_temp_coord = process_and_store_data(os.path.join("Ehyd","datasets_ehyd", "Surface_Water", surface_water_folders[1][0]), surface_water_coordinates, "surface_water_temp_")
+    sediment_dict, sediment_coord = process_and_store_data(os.path.join("Ehyd","datasets_ehyd", "Surface_Water", surface_water_folders[2][0]), surface_water_coordinates, "sediment_")
+    surface_water_fr_dict, surface_water_fr_coord = process_and_store_data(os.path.join("Ehyd","datasets_ehyd", "Surface_Water", surface_water_folders[3][0]), surface_water_coordinates, "surface_water_fr_")
+
     ########################################################################################################################
     # Gathering associated additional features for required 487 stations
     ########################################################################################################################
+    print("Finding nearest stations based on coordinates.")
     def calculate_distance(coord1, coord2):
         """
         Calculates the Euclidean distance between two points in a Cartesian coordinate system.
@@ -285,18 +288,11 @@ def main():
 
         results_df = pd.DataFrame(results)
 
-        # # Debug: Check if 'hzbnr01' exists in both dataframes
-        # print("Columns in df_to_merge:", df_to_merge.columns)
-        # print("Columns in results_df:", results_df.columns)
-
         # Ensure that the column exists in both dataframes before merging
         if 'hzbnr01' in df_to_merge.columns and 'hzbnr01' in results_df.columns:
             # Merge operation
             df = df_to_merge.merge(results_df, on='hzbnr01', how='inner')
 
-            # Debug: Birle?tirilmi? DataFrame'i yazd?rarak kontrol et
-            # print("Merged DataFrame:")
-            # print(df.head())
         else:
             raise KeyError("Column 'hzbnr01' does not exist in one of the dataframes.")
 
@@ -317,6 +313,8 @@ def main():
     ########################################################################################################################
     # Imputing NaN Values
     ########################################################################################################################
+    print("\n---------- Data Imputation ----------")
+
     def nan_imputer(dataframes):
         """
         Imputes missing values in a dictionary of DataFrames by filling NaNs with the corresponding monthly means,
@@ -370,10 +368,8 @@ def main():
                         # Use the next month mean if available
                         df_copy.loc[remaining_nan_mask, 'Values'] = next_month_mean
 
-            # Son olarak, kalan tüm NaN'lar? 0 ile doldur
             df_copy['Values'].fillna(0, inplace=True)
 
-            # Doldurulmu? DataFrame'i yeni sözlü?e ekle
             new_dict[df_name] = df_copy
 
         return new_dict
@@ -390,10 +386,12 @@ def main():
     filled_surface_water_temp_dict = nan_imputer(surface_water_temp_dict)
     filled_sediment_dict = nan_imputer(sediment_dict)
 
-    print("--------------------- NaN imputer: Complete")
+    print("Complete")
     ########################################################################################################################
     # Adding lagged values and rolling means
     ########################################################################################################################
+    print("\n---------- Feature Engineering ----------")
+
     filled_dict_list = [filled_gw_temp_dict, filled_filtered_groundwater_dict, filled_snow_dict, filled_rain_dict,
                         filled_conduct_dict, filled_source_fr_dict, filled_source_temp_dict, filled_surface_water_lvl_dict,
                         filled_surface_water_fr_dict, filled_surface_water_temp_dict, filled_sediment_dict]
@@ -425,15 +423,6 @@ def main():
     for dictionary in filled_dict_list:
         for key, df in dictionary.items():
             dictionary[key] = add_lag_and_rolling_mean(df)
-
-    ########################################################################################################################
-    # Zero Padding and Data Type Change (float32)
-    ########################################################################################################################
-    for dictionary in filled_dict_list:
-        for key, df in dictionary.items():
-            df.fillna(0, inplace=True)
-            df = df.astype(np.float32)
-            dictionary[key] = df
 
     ########################################################################################################################
     # Creating two new dictionaries:
@@ -480,7 +469,8 @@ def main():
             new_dataframes[code] = df
 
 
-    print("--------------------- new_dataframes dictionary: Complete")
+    print("Created new_dataframes dictionary")
+
     monthly_dict_85to21 = {}
     for year in range(1985, 2022):
         for month in range(1, 13):
@@ -501,11 +491,13 @@ def main():
                 combined_df = pd.concat(monthly_data)
                 monthly_dict_85to21[key] = combined_df
 
-    print("--------------------- monthly_dict_85to21 dictionary: Complete")
-    print("--------------------- Starting SARIMA!")
+    print("Created monthly_dict_85to21 dictionary")
+
     ########################################################################################################################
     # SARIMA Model
     ########################################################################################################################
+    print("\n---------- Model Training ----------")
+
     def average_correlation_feature_selection(data_dict, threshold=0.1):
         """
         Computes average correlation of features with the target variable across multiple dataframes and selects features
@@ -717,14 +709,17 @@ def main():
 
     forecast_final_df = pd.DataFrame(forecasts_final)
     forecast_final_df.insert(0, 'date', pd.date_range(start='2022-01-01', end='2024-06-01', freq='MS'))
-    csv_columns = pd.read_csv('datasets_ehyd/gw_test_empty.csv', nrows=0).columns.tolist()
+    csv_columns = pd.read_csv('Ehyd/datasets_ehyd/gw_test_empty.csv', nrows=0).columns.tolist()
     forecast_final_df = forecast_final_df[csv_columns]
 
     current_date = datetime.today().strftime('%Y_%m_%d')
     file_path = f"groundwater_forecasts/forecast_{current_date}.csv"
 
     forecast_final_df.to_csv(file_path, index=False)
-    print(f"--------------------- 'forecast_{current_date}.csv' is created under 'groundwater_forecasts' directory.")
+    print(f"Created 'forecast_{current_date}.csv' under 'groundwater_forecasts' directory.")
 
 if __name__ == "__main__":
+    import sys
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
     main()
