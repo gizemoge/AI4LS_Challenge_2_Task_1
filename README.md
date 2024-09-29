@@ -145,7 +145,7 @@ model = SARIMAX(
 model_fit = model.fit(disp=False)
 ```
 
-
+<br>
 
 ### 5. Forecasting Future Values
 The model forecasts the next 30 time steps (months) for the given groundwater level measurement stations using the fitted model. 
