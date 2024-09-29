@@ -38,13 +38,19 @@ cd AI4LS_Challenge
 pip install -r requirements.txt
 ```
 
+Then you can run the script and obtain the forecast (created under `groundwater_forecasts` directory) by running:
+
+```bash
+python main.py
+```
 <br>
 
 ## Methodology
 
 ### 1. Data Preprocessing
 The four datasets from `ehyd.gv.at` related to groundwater, precipitation, water sources and surface waters in Austria are downloaded into the provided data structure. 
-The folder names are renamed to their English equivalents, but no changes are made to the files themselves. 
+The folder names are renamed to their English equivalents, and umlaut substitution was applied to necessary subfolders, but no changes are made to the files themselves. 
+
 The measurement data is extracted from the CSV files, and a dictionary is created for each variable. 
 In these dictionaries, the keys represent the date (_year-month_), and the dataframes contain the measurement station IDs as their indices. 
 The coordinates are obtained from the `messstellen_alle` files.
