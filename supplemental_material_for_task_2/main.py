@@ -16,6 +16,8 @@ from matplotlib.colors import LinearSegmentedColormap
 import sys
 from scipy.spatial.distance import cdist
 import shap
+import plotly.express as px
+import plotly.graph_objects as go
 pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', None)
 pd.set_option('display.float_format', lambda x: '%.3f' % x)
@@ -694,8 +696,9 @@ highest_smape_key, highest_smape_value = sorted_smape_scores[0]
 print(f"Coordinate with highest SMAPE: {highest_smape_key}, De?er: {highest_smape_value:.2f}%")
 
 
-
+########################################################################################################################
 # Feature Importance: SHAP
+########################################################################################################################
 color_palette = ['#dc7077', '#eb9874', '#e4d692', '#89c684', '#2ba789']
 
 feature_count = len(X_train.columns) - 2
@@ -734,3 +737,135 @@ plt.ylabel('Features')
 plt.title('Average SHAP Values for All Coordinates')
 plt.gca().invert_yaxis()
 plt.show()
+
+########################################################################################################################
+# Graph of selected coordinates
+########################################################################################################################
+
+# Plot the map with plotly express
+fig = px.scatter_geo(
+    selected_coordinates,
+    lat='lat',
+    lon='lon',
+    title="Selected Coordinates"
+)
+
+# Set the color for all points
+fig.update_traces(marker=dict(color='#2ba789', size=7))
+
+fig.update_geos(
+    projection_type="equirectangular",
+    lataxis_range=[-60, 90],
+    showcoastlines=True,
+    coastlinecolor="LightGray"
+)
+
+# Center the title and place it above the map
+fig.update_layout(
+    title={
+        'text': "Selected Coordinates",
+        'y': 0.85,  # Adjusts the height of the title on the Y axis (0 = bottom, 1 = top)
+        'x': 0.5,   # Centers the title on the X axis
+        'xanchor': 'center',
+        'yanchor': 'top'
+    },
+    titlefont=dict(size=24),
+    plot_bgcolor='rgba(0,0,0,0)',
+    paper_bgcolor='rgba(0,0,0,0)'
+)
+
+# Show the map
+fig.show()
+
+
+########################################################################################################################
+# Plot of actual and predicted values of the point with the highest smape value
+########################################################################################################################
+highest_smape_key, highest_smape_value = sorted_smape_scores[0]
+print(f"Coordinate with the highest SMAPE: {highest_smape_key}, De?er: {highest_smape_value:.2f}%")
+
+# Coordinates and values
+coord = highest_smape_key
+y_true = all_true_values[coord].flatten()  # Flattening the array for use
+y_pred = all_predictions[coord].flatten()
+
+dates = pd.date_range(start="2019-01-01", periods=len(y_true), freq='M')
+
+# Create the figure
+fig = go.Figure()
+
+# Add the true values line
+fig.add_trace(go.Scatter(x=dates, y=y_true, mode='lines', name='True Values',
+                         line=dict(color='#e4d692', width=4, dash='solid')))
+
+# Add the predicted values line
+fig.add_trace(go.Scatter(x=dates, y=y_pred, mode='lines', name='Predicted Values',
+                         line=dict(color='#2ba789', width=4, dash='dash')))
+
+# Update layout with English labels and centered title
+fig.update_layout(
+    title={
+        'text': f"True and Predicted Values for Coordinates {coord}",
+        'y': 0.9,  # Adjust the height of the title
+        'x': 0.5,  # Center the title
+        'xanchor': 'center',
+        'yanchor': 'top'
+    },
+    plot_bgcolor='white',
+    paper_bgcolor='white',
+    width=1200,
+    height=500,
+    #xaxis_title="Time",
+    yaxis_title="Values",
+    xaxis=dict(showgrid=True, gridcolor='LightGray', tick0=dates[0], tickformat='%b-%Y', dtick="M12"),  # X axis grid and title
+    yaxis=dict(showgrid=True, gridcolor='LightGray', title_text="Values")   # Y axis grid and title
+)
+
+# Show the figure
+fig.show()
+
+########################################################################################################################
+# Plot of actual and predicted values of the point with the lowest smape value
+########################################################################################################################
+lowest_smape_key, lowest_smape_value = sorted_smape_scores[-1]
+print(f"Coordinate with the lowest SMAPE: {lowest_smape_key}, De?er: {lowest_smape_value:.2f}%")
+
+# Coordinates and values
+coord = lowest_smape_key
+y_true = all_true_values[coord].flatten()  # Flattening the array for use
+y_pred = all_predictions[coord].flatten()
+
+dates = pd.date_range(start="2019-01-01", periods=len(y_true), freq='M')
+
+# Create the figure
+fig = go.Figure()
+
+# Add the true values line
+fig.add_trace(go.Scatter(x=dates, y=y_true, mode='lines', name='True Values',
+                         line=dict(color='#e4d692', width=4, dash='solid')))
+
+# Add the predicted values line
+fig.add_trace(go.Scatter(x=dates, y=y_pred, mode='lines', name='Predicted Values',
+                         line=dict(color='#2ba789', width=4, dash='dash')))
+
+# Update layout with English labels and centered title
+fig.update_layout(
+    title={
+        'text': f"True and Predicted Values for Coordinates {coord}",
+        'y': 0.9,  # Adjust the height of the title
+        'x': 0.5,  # Center the title
+        'xanchor': 'center',
+        'yanchor': 'top'
+    },
+    plot_bgcolor='white',
+    paper_bgcolor='white',
+    width=1200,
+    height=500,
+    #xaxis_title="Time",
+    yaxis_title="Values",
+    xaxis=dict(showgrid=True, gridcolor='LightGray', tick0=dates[0], tickformat='%b-%Y', dtick="M12"),  # X axis grid and title
+    yaxis=dict(showgrid=True, gridcolor='LightGray', title_text="Values")   # Y axis grid and title
+)
+
+# Show the figure
+fig.show()
