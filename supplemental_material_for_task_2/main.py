@@ -6,6 +6,23 @@ import requests
 import os
 import re
 import warnings
+from statsmodels.stats.outliers_influence import variance_inflation_factor
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import Ridge
+from tqdm import tqdm
+import matplotlib.pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap
+import sys
+from scipy.spatial.distance import cdist
+import shap
+pd.set_option('display.max_columns', None)
+pd.set_option('display.max_rows', None)
+pd.set_option('display.float_format', lambda x: '%.3f' % x)
+pd.set_option('display.max_colwidth', None)
+pd.set_option('display.width', 500)
+
+
 warnings.filterwarnings("ignore")
 
 ########################################################################################################################
@@ -303,8 +320,8 @@ for key, df in gldas_dict_2004_2009.items():
 gldas_dict_2004_2009 = filtered_dict.copy()
 
 
-# Selecting coordinates in every 209 given longitude
-def reduce_to_first_of_209(df):
+# Selecting coordinates in every 19 given longitude
+def reduce_to_first_of_19(df):
     return df.iloc[::19, :]
 
 
@@ -388,7 +405,7 @@ mean_df = first_df[['lat', 'lon']].copy()
 
 mean_df[['MSN_mean', 'MSW_mean', 'MSM_mean']] = 0.0
 
-# Her ölçüm noktas? için 72 ayl?k ortalamalar? hesapla
+
 for index in range(len(first_df)):
     mean_df.loc[index, ['MSN_mean', 'MSW_mean', 'MSM_mean']] = [
         sum(df[col].iloc[index] for df in results_dict_2004_2009.values()) / len(results_dict_2004_2009)
@@ -409,7 +426,7 @@ averages = first_rows_df[['MSN', 'MSW', 'MSM']].mean()
 for key, df in results_dict_2010_2024.items():
     df_merged = df.merge(mean_df[['lat', 'lon', 'MSN_mean', 'MSW_mean', 'MSM_mean']], on=['lat', 'lon'])
 
-    # Yeni kolonlar? olu?turuyoruz
+
     df['delta_MSN'] = df['MSN'] - df_merged['MSN_mean']
     df['delta_MSW'] = df['MSW'] - df_merged['MSW_mean']
     df['delta_MSM'] = df['MSM'] - df_merged['MSM_mean']
@@ -488,7 +505,230 @@ for i in range(len(lat_values)):
         if not lon_equal:
             print(f"df{i + 1} ve df{j + 1}: 'lon' columns are the same.")
 
+
+# Multicollinearity test: Variance inflation factor (VIF)
+with open('supplemental_material_for_task_2/pkl_files/new_1151_results_dict_2010_2024.pkl', 'rb') as file:
+    data_dict = pickle.load(file)
+
+new_dict = {}
+
+for month, df in tqdm(data_dict.items(), desc="Processing months"):
+    for index, row in df.iterrows():
+        lat_lon_key = (row['lat'], row['lon'])
+        if lat_lon_key not in new_dict:
+            new_dict[lat_lon_key] = pd.DataFrame(columns=['date'] + df.columns.tolist()[2:])
+
+        new_row = row.drop(['lat', 'lon']).to_dict()
+        new_row['date'] = month
+
+        new_df = pd.DataFrame([new_row])
+        new_dict[lat_lon_key] = pd.concat([new_dict[lat_lon_key], new_df], ignore_index=True)
+
+
+def calculate_vif(df):
+    X = df.select_dtypes(include='number')
+    vif_data = pd.DataFrame()
+    vif_data["feature"] = X.columns
+    vif_data["VIF"] = [variance_inflation_factor(X.values, i) for i in range(X.shape[1])]
+    return vif_data
+
+vif_results = {}
+for key, df in tqdm(new_dict.items(), desc="Calculating VIF"):
+    vif_results[key] = calculate_vif(df)
+
+for key, result in vif_results.items():
+    print(f"VIF Results for {key}:")
+    print(result)
+
+
 ########################################################################################################################
 # MODEL
 ########################################################################################################################
 
+train_dfs = [df for key, df in data_dict.items() if 201001 <= int(key) <= 201812]
+train_data = pd.concat(train_dfs)
+
+test_dfs = [df for key, df in data_dict.items() if 201901 <= int(key) <= 202404]
+test_data = pd.concat(test_dfs)
+
+def smape(y_true, y_pred):
+    return 100 * np.mean(2 * np.abs(y_pred - y_true) / (np.abs(y_pred) + np.abs(y_true)))
+
+coordinates = train_data[['lat', 'lon']].drop_duplicates().reset_index(drop=True)
+selected_coordinates = coordinates.iloc[np.linspace(0, len(coordinates) - 1, 50, dtype=int)]
+
+rf_params = {'bootstrap': True, 'max_depth': 20, 'max_features': None,
+             'min_samples_leaf': 2, 'min_samples_split': 2, 'n_estimators': 400}
+model_rf = RandomForestRegressor(**rf_params)
+
+ridge_params = {'alpha': 0.1, 'fit_intercept': False, 'solver': 'svd'}
+model_ridge = Ridge(**ridge_params)
+
+gb_params = {'n_estimators': 400, 'max_depth': 20, 'min_samples_leaf': 2, 'min_samples_split': 2}
+model_gb = GradientBoostingRegressor(**gb_params)
+
+scaler_X = StandardScaler()
+scaler_y = StandardScaler()
+
+best_models_per_coord = {}
+
+for coord in tqdm(selected_coordinates.itertuples(index=False), desc="50 nokta için ba?ar? ölçülüyor", file=sys.stdout):
+    coord_train_data = train_data[(train_data['lat'] == coord.lat) & (train_data['lon'] == coord.lon)]
+    coord_test_data = test_data[(test_data['lat'] == coord.lat) & (test_data['lon'] == coord.lon)]
+
+    if coord_train_data.empty or coord_test_data.empty:
+        print(f"Warning: {coord} coordinates do not have train or test data. Skipping.")
+        continue
+
+    X_train = coord_train_data.drop(columns=['delta_MGW'])
+    y_train = coord_train_data['delta_MGW'].values.reshape(-1, 1)
+    X_test = coord_test_data.drop(columns=['delta_MGW'])
+    y_test = coord_test_data['delta_MGW'].values.reshape(-1, 1)
+
+    X_train_scaled = scaler_X.fit_transform(X_train)
+    y_train_scaled = scaler_y.fit_transform(y_train)
+    X_test_scaled = scaler_X.transform(X_test)
+
+    models = [model_rf, model_ridge, model_gb]
+    smape_scores = []
+    for model in models:
+        model.fit(X_train_scaled, y_train_scaled.ravel())
+        y_pred_scaled = model.predict(X_test_scaled)
+        y_pred = scaler_y.inverse_transform(y_pred_scaled.reshape(-1, 1))
+        smape_score = smape(y_test, y_pred)
+        smape_scores.append(smape_score)
+
+    best_two_models_indices = sorted(range(len(models)), key=lambda i: smape_scores[i])[:2]
+    best_models_per_coord[(coord.lat, coord.lon)] = best_two_models_indices
+
+all_predictions = {}
+all_true_values = {}
+all_smape_scores = {}
+
+shap_values_dict = {}
+
+distances = cdist(coordinates[['lat', 'lon']], selected_coordinates[['lat', 'lon']], metric='euclidean')
+nearest_selected_idx = np.argmin(distances, axis=1)
+
+with tqdm(total=len(coordinates), desc="Forecasting", file=sys.stdout) as pbar:
+    for idx, coord in enumerate(coordinates.itertuples(index=False)):
+        coord_train_data = train_data[(train_data['lat'] == coord.lat) & (train_data['lon'] == coord.lon)]
+        coord_test_data = test_data[(test_data['lat'] == coord.lat) & (test_data['lon'] == coord.lon)]
+
+        if coord_train_data.empty or coord_test_data.empty:
+            print(f"Warnning: {coord} coordinates do not have train or test data. Skipping.")
+            continue
+
+        X_train = coord_train_data.drop(columns=['delta_MGW'])
+        y_train = coord_train_data['delta_MGW'].values.reshape(-1, 1)
+        X_test = coord_test_data.drop(columns=['delta_MGW'])
+        y_test = coord_test_data['delta_MGW'].values.reshape(-1, 1)
+
+        X_train_scaled = scaler_X.fit_transform(X_train)
+        y_train_scaled = scaler_y.fit_transform(y_train)
+        X_test_scaled = scaler_X.transform(X_test)
+
+        nearest_coord = selected_coordinates.iloc[nearest_selected_idx[idx]]
+        best_two_models_indices = best_models_per_coord[(nearest_coord.lat, nearest_coord.lon)]
+
+        best_two_models = [type(models[idx]).__name__ for idx in best_two_models_indices]
+
+        meta_model = Ridge()
+
+        y_preds = []
+        for model_idx in best_two_models_indices:
+            model = models[model_idx]
+            model.fit(X_train_scaled, y_train_scaled.ravel())
+            y_pred_scaled = model.predict(X_test_scaled)
+            y_pred = scaler_y.inverse_transform(y_pred_scaled.reshape(-1, 1))
+            y_preds.append(y_pred)
+
+        y_preds_combined = np.hstack(y_preds)
+        meta_model.fit(y_preds_combined, y_test.ravel())
+        weighted_prediction = meta_model.predict(y_preds_combined)
+
+        smape_score = smape(y_test, weighted_prediction.reshape(-1, 1))
+        all_smape_scores[(coord.lat, coord.lon)] = smape_score
+        all_predictions[(coord.lat, coord.lon)] = weighted_prediction.reshape(-1, 1)
+        all_true_values[(coord.lat, coord.lon)] = y_test
+
+        meta_weights = meta_model.coef_
+
+        if meta_weights[0] > meta_weights[1]:
+            dominant_model = best_two_models[0]
+        else:
+            dominant_model = best_two_models[1]
+
+        if dominant_model == 'RandomForestRegressor':
+            explainer_rf = shap.TreeExplainer(models[best_two_models_indices[best_two_models.index('RandomForestRegressor')]])
+            shap_values_rf = explainer_rf.shap_values(scaler_X.transform(coord_test_data.drop(columns=['delta_MGW'])))
+            shap_values = shap_values_rf
+            model_type = 'RandomForest'
+        elif dominant_model == 'Ridge':
+            explainer_ridge = shap.LinearExplainer(models[best_two_models_indices[best_two_models.index('Ridge')]], scaler_X.transform(coord_train_data.drop(columns=['delta_MGW'])))
+            shap_values_ridge = explainer_ridge.shap_values(scaler_X.transform(coord_test_data.drop(columns=['delta_MGW'])))
+            shap_values = shap_values_ridge
+            model_type = 'Ridge'
+        elif dominant_model == 'GradientBoostingRegressor':
+            explainer_gb = shap.TreeExplainer(models[best_two_models_indices[best_two_models.index('GradientBoostingRegressor')]])
+            shap_values_gb = explainer_gb.shap_values(scaler_X.transform(coord_test_data.drop(columns=['delta_MGW'])))
+            shap_values = shap_values_gb
+            model_type = 'GradientBoosting'
+
+        shap_values_dict[(coord.lat, coord.lon)] = {
+            'shap_values': shap_values,
+            'model_type': model_type
+        }
+
+        pbar.update(1)
+
+average_smape = np.mean(list(all_smape_scores.values()))
+print(f'Mean SMAPE: {average_smape:.2f}%')
+
+print(pd.Series(all_smape_scores.values()).describe())
+
+sorted_smape_scores = sorted(all_smape_scores.items(), key=lambda x: x[1], reverse=True)
+highest_smape_key, highest_smape_value = sorted_smape_scores[0]
+print(f"Coordinate with highest SMAPE: {highest_smape_key}, De?er: {highest_smape_value:.2f}%")
+
+
+
+# Feature Importance: SHAP
+color_palette = ['#dc7077', '#eb9874', '#e4d692', '#89c684', '#2ba789']
+
+feature_count = len(X_train.columns) - 2
+cmap = LinearSegmentedColormap.from_list("custom_cmap", color_palette, N=feature_count)
+
+def calculate_mean_shap_values(shap_values_dict, feature_names):
+    total_shap_values = np.zeros(len(feature_names))
+    count = 0
+
+    for coord, shap_info in shap_values_dict.items():
+        shap_values = shap_info['shap_values']
+        shap_values_filtered = shap_values[:, 2:]
+        total_shap_values += np.mean(np.abs(shap_values_filtered), axis=0)
+        count += 1
+
+    mean_shap_values = total_shap_values / count
+    return mean_shap_values
+
+feature_names = X_train.columns.tolist()
+feature_names.remove('lat')
+feature_names.remove('lon')
+
+mean_shap_values = calculate_mean_shap_values(shap_values_dict, feature_names)
+
+sorted_indices = np.argsort(mean_shap_values)[::-1]
+sorted_shap_values = mean_shap_values[sorted_indices]
+sorted_feature_names = np.array(feature_names)[sorted_indices]
+
+bar_colors = [cmap(i / (feature_count - 1)) for i in range(feature_count)]
+
+plt.figure(figsize=(10, 6))
+bars = plt.barh(sorted_feature_names, sorted_shap_values, color=bar_colors[::-1])
+
+plt.xlabel('Average SHAP Value (Feature Importance)')
+plt.ylabel('Features')
+plt.title('Average SHAP Values for All Coordinates')
+plt.gca().invert_yaxis()
+plt.show()
