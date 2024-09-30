@@ -77,6 +77,8 @@ for month, is_equal in results.items():
 ########################################################################################################################
 # GLDAS
 ########################################################################################################################
+# Please see GLDAS website for how to authenticate your device for data fetching.
+# This function will not work unless the authentication steps are complete.
 
 def load_gldas_dict_2004_2009():
     # 1. Fetch data between 2004-2009 to match GRACE's averaged format
@@ -320,9 +322,9 @@ for key, df in gldas_dict_2004_2009.items():
 gldas_dict_2004_2009 = filtered_dict.copy()
 
 
-# Selecting coordinates in every 19 given longitude
-def reduce_to_first_of_19(df):
-    return df.iloc[::19, :]
+# Selecting coordinates in every 209 given longitude
+def reduce_to_first_of_209(df):
+    return df.iloc[::209, :]
 
 
 def convert_cols(df, input_col):
@@ -341,7 +343,7 @@ def process_data(dict):
     results_dict = {}
 
     for key, df in dict.items():
-        results_dict[key] = reduce_to_first_of_19(df)
+        results_dict[key] = reduce_to_first_of_209(df)
         results_dict[key].reset_index(drop=True, inplace=True)
 
     for month, df in results_dict.items():
