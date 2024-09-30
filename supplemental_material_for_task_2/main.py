@@ -14,16 +14,15 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 import sys
-from scipy.spatial.distance import cdist
 import shap
 import plotly.express as px
-import plotly.graph_objects as go
+import plotly.graph_objs as go
+from scipy.spatial.distance import cdist
 pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', None)
 pd.set_option('display.float_format', lambda x: '%.3f' % x)
 pd.set_option('display.max_colwidth', None)
 pd.set_option('display.width', 500)
-
 
 warnings.filterwarnings("ignore")
 
@@ -742,17 +741,39 @@ plt.show()
 # Graph of selected coordinates
 ########################################################################################################################
 
-# Plot the map with plotly express
+# Assign each coordinate to the nearest selected_coordinate
+coordinates = train_data[['lat', 'lon']].drop_duplicates().reset_index(drop=True)
+selected_coordinates = coordinates.iloc[np.linspace(0, len(coordinates) - 1, 50, dtype=int)]
+
+# Find the nearest selected_coordinate based on Euclidean distances
+distances = cdist(coordinates[['lat', 'lon']], selected_coordinates[['lat', 'lon']], metric='euclidean')
+nearest_selected_idx = np.argmin(distances, axis=1)
+
+# Add the nearest selected_coordinate index to each coordinate
+coordinates['nearest_selected'] = nearest_selected_idx
+
+# Color the points based on their nearest selected_coordinate
 fig = px.scatter_geo(
-    selected_coordinates,
+    coordinates,
     lat='lat',
     lon='lon',
-    title="Selected Coordinates"
+    color='nearest_selected',  # Color based on nearest selected_coordinate
+    title="Grouping of Coordinates by Nearest Selected Coordinate",
+    color_continuous_scale=px.colors.qualitative.Plotly  # Choose color scale
 )
 
-# Set the color for all points
-fig.update_traces(marker=dict(color='#2ba789', size=7))
+# Add selected_coordinates in a different color
+fig.add_trace(
+    go.Scattergeo(
+        lat=selected_coordinates['lat'],
+        lon=selected_coordinates['lon'],
+        mode='markers',
+        marker=dict(size=10, color='black'),
+        name='Selected Coordinates'
+    )
+)
 
+# Map settings
 fig.update_geos(
     projection_type="equirectangular",
     lataxis_range=[-60, 90],
@@ -763,7 +784,7 @@ fig.update_geos(
 # Center the title and place it above the map
 fig.update_layout(
     title={
-        'text': "Selected Coordinates",
+        'text': "Grouping of Coordinates by Nearest Selected Coordinate",
         'y': 0.85,  # Adjusts the height of the title on the Y axis (0 = bottom, 1 = top)
         'x': 0.5,   # Centers the title on the X axis
         'xanchor': 'center',
