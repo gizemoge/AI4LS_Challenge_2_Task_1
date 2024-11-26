@@ -1,4 +1,4 @@
-# AI4LS_Challenge: Task 1
+# AI4LS Challenge #2: Task 1
 
 ## Introduction
 This project involves processing multiple CSV files containing time series data from thousands of measurement water stations in Austria ![Austria](https://raw.githubusercontent.com/stevenrskelton/flag-icon/master/png/16/country-4x3/at.png "Austria"). The data is cleaned, filtered, and merged by geographic coordinates to generate forecasts for a specific geographic location using machine learning models.
@@ -34,7 +34,7 @@ You can clone the repository, navigate to the project directory, and install the
 
 ```bash
 git clone https://github.com/gizemoge/AI4LS_Challenge.git
-cd AI4LS_Challenge
+cd AI4LS2_Task1
 pip install -r requirements.txt
 ```
 

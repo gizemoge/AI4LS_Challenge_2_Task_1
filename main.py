@@ -26,7 +26,7 @@ def station_coordinates(input):
     Returns:
         df: A DataFrame containing columns "x", "y", and "hzbnr01".
     """
-    df = pd.read_csv(f"Ehyd/datasets_ehyd/{input}/messstellen_alle.csv", sep=";")
+    df = pd.read_csv(f"datasets_ehyd/{input}/messstellen_alle.csv", sep=";")
     output_df = df[["x", "y", "hzbnr01"]].copy()
     output_df['x'] = output_df['x'].astype(str).str.replace(',', '.').astype("float32")
     output_df['y'] = output_df['y'].astype(str).str.replace(',', '.').astype("float32")
@@ -215,7 +215,7 @@ def main():
         ("Q-Tagesmittel", "surface_water_fr_")]
 
     # Groundwater Dictionary (Filtered down to the requested 487 stations)
-    stations = pd.read_csv("Ehyd/datasets_ehyd/gw_test_empty.csv")
+    stations = pd.read_csv("datasets_ehyd/gw_test_empty.csv")
     station_list = [col for col in stations.columns[1:]]
     filtered_groundwater_dict, filtered_gw_coordinates = process_and_store_data(
         "Ehyd/datasets_ehyd/Groundwater/Grundwasserstand-Monatsmittel",
@@ -710,7 +710,7 @@ def main():
 
     forecast_final_df = pd.DataFrame(forecasts_final)
     forecast_final_df.insert(0, 'date', pd.date_range(start='2022-01-01', end='2024-06-01', freq='MS'))
-    csv_columns = pd.read_csv('Ehyd/datasets_ehyd/gw_test_empty.csv', nrows=0).columns.tolist()
+    csv_columns = pd.read_csv('datasets_ehyd/gw_test_empty.csv', nrows=0).columns.tolist()
     forecast_final_df = forecast_final_df[csv_columns]
 
     current_date = datetime.today().strftime('%Y_%m_%d')
